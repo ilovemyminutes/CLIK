@@ -1,7 +1,7 @@
 # CLIK: Contrastive Learning of text and Image for ranKing
 * CLIK은 하나의 맥락을 공유하는 여러 개체들에 대해 특정 타깃값을 기준으로 랭킹을 매기는 모델로, [네이버쇼핑 기획전 서비스](https://shopping.naver.com/plan2/p/index.naver) 내 대표 이미지 선출 자동화를 위해 제작되었습니다.
 * 모델에 대한 좀더 자세한 설명은 [CLIK.pdf](https://github.com/iloveslowfood/CLIK/blob/main/etc/CLIK.pdf)에서 확인하실 수 있습니다.
-![](https://github.com/iloveslowfood/CLIK/blob/main/etc/arch.png?raw=true)
+![](https://github.com/iloveslowfood/CLIK/blob/main/etc/arch.jpg?raw=true)
 
 ---
 ## Data Collection
