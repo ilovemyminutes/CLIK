@@ -1,12 +1,12 @@
 # CLIK: Contrastive Learning of text and Image for ranKing
 * CLIK은 하나의 맥락을 공유하는 여러 개체들에 대해 특정 타깃값을 기준으로 랭킹을 매기는 모델로, [네이버쇼핑 기획전 서비스](https://shopping.naver.com/plan2/p/index.naver) 내 대표 이미지 선출 자동화를 위해 제작되었습니다.
-* 모델에 대한 좀더 자세한 설명은 [CLIK.pdf](https://oss.navercorp.com/jeehyung-ko/CLIK/blob/master/etc/CLIK.pdf)에서 확인하실 수 있습니다.
-![](https://oss.navercorp.com/jeehyung-ko/CLIK/blob/master/etc/arch.png?raw=true)
+* 모델에 대한 좀더 자세한 설명은 [CLIK.pdf](https://github.com/iloveslowfood/CLIK/blob/main/etc/CLIK.pdf)에서 확인하실 수 있습니다.
+![](https://github.com/iloveslowfood/CLIK/blob/main/etc/arch.png?raw=true)
 
 ---
 ## Data Collection
 * 모델 학습을 위한 데이터는 [네이버쇼핑 기획전 서비스](https://shopping.naver.com/plan2/p/index.naver)로부터 수집됩니다.
-* 구체적인 수집 방법 및 절차는 [[Guide] Data Collection.ipynb](https://oss.navercorp.com/jeehyung-ko/CLIK/blob/master/etc/%5BGuide%5D%20Data%20Collection.ipynb)에서 확인하실 수 있습니다.
+* 구체적인 수집 방법 및 절차는 [[Guide] Data Collection.ipynb](https://github.com/iloveslowfood/CLIK/blob/main/etc/%5BGuide%5D%20Data%20Collection.ipynb)에서 확인하실 수 있습니다.
 
 ---
 ## Usage
@@ -118,7 +118,7 @@ plan_attrs = {
   * 타깃: CTR
   * 수집 기간: 2021. 08. 05 \~ 2021. 11. 05
   
-![](https://oss.navercorp.com/jeehyung-ko/CLIK/blob/master/etc/evaluation_results.jpg?raw=true)
+![](https://github.com/iloveslowfood/CLIK/blob/main/etc/evaluation_results.jpg?raw=true)
 
 ---
 ## Code Format
