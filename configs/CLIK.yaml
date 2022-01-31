@@ -1,0 +1,64 @@
+# model configuration
+network: "CLIK"                                                # network name (DO NOT CHANGE)
+feature_dim: 128                                               # embedding dim
+queue_size: 512                                                # size of instance queue (MUST BE EQUAL TO 'matching_size')
+backbone_txt: "dsksd/bert-ko-small-minimal"                    # pretrained BERT
+backbone_img: "vit_small_patch16_224_in21k"                    # vit_small_patch16_224_in21k, resnet50, ...
+dropout: 0.1
+
+# data configuration
+target: "ctr"                                                  # target ('prod_review_cnt', 'ctr', ...)
+partial_cats: []                                               # used to specify category during train (ex. ['digital', 'women_shoes'])
+sampling_method: 'weighted'                                    # sampling method during preference discrimination ('weighted', 'random')
+plan_attrs: [                                                  # plan attributes
+  "plan_name", 
+  "plan_startdate", 
+  "plan_cat1", 
+  "plan_cat2", 
+  "plan_kwds"
+  ]
+prod_attrs: [                                                  # product attributes (only used for text augmentation)
+  "prod_name", 
+  "prod_text", 
+  "prod_opendate", 
+  "prod_cat1", 
+  "prod_cat2", 
+  "prod_cat3", 
+  "prod_cat4", 
+  "prod_page_title"
+  ]
+img_h: 224                                                     # height of image as input
+img_w: 224                                                     # width of image as input
+txt_max_length: 128                                            # max length of text during preprocessing
+img_dir: "/data/vplan_ver_2-2/train/prod_data/images"          # image data directory
+train_matching: "/data/vplan_ver_2-2/train/train_discrim.csv"  # train data for semantic matching
+train_discrim: "/data/vplan_ver_2-2/train/train_discrim.csv"   # train data for preference discrimination
+valid_matching: "/data/vplan_ver_2-2/train/valid_discrim.csv"  # valid data for semantic matching
+valid_discrim: "/data/vplan_ver_2-2/train/valid_discrim.csv"   # valid data for preference discrimination
+train_subsample_rate: 1.0                                      # subsample size for train
+valid_subsample_rate: 1.0                                      # subsample size for valid
+
+# train configuration
+matching_size: 512                                             # batch size for semantic matching (M)
+discrim_size: 20                                               # batch size for preference discrimination (K)
+discrim_iter: 12                                               # num iters of preference discrimination for each step (D)
+word_dropout: 0.1                                              # word dropout rate during text preprocessing for train
+epochs: 10                                                     # train epochs
+lr_txt: 5e-5                                                   # learning rate for text encoder
+lr_img: 1e-4                                                   # learning rate for image encoder
+temperature: 0.07                                              # temperature for NT-Xent Loss
+p_txt_aug: 0.5                                                 # text augmentation prob (0: deactivate): 'prod_attrs' is used if activated
+seed: 27                                                       # random seed
+
+# gpu/cpu configuration
+is_nsml: True                                                  # usage of NSML
+is_distributed: True                                           # usage of dist. training. If True, 'world_size' is used. If False, 'gpu_idx' is used.
+world_size: 4                                                  # (distributed training) world_size for pytorch DDP
+gpu_idx: 0                                                     # (single-gpu training) gpu index
+num_workers: 0                                                 # num of workers for DataLoader 
+
+# checkpoint configuration
+log_save_dir: './logs/'                                        # log save directory
+ckpt_load_path: None                                           # checkpoint load path
+ckpt_save_dir: './ckpts/'                                      # checkpoint save directory
+exp_title: 'CLIK'                                              # experiment name or contents
