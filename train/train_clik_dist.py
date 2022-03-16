@@ -253,8 +253,6 @@ def main(rank, config_path: str, world_size: int):
     # load meta data
     train_matching, train_discrim, valid_matching, valid_discrim = load_meta_data(args)
 
-    train_cats = train_discrim[args.main_cat_depth].unique().tolist()
-    valid_cats = valid_discrim[args.main_cat_depth].unique().tolist()
     if rank == 0 and len(set(train_cats).intersection(set(valid_cats))) != len(
         train_cats
     ):
