@@ -253,11 +253,6 @@ def main(rank, config_path: str, world_size: int):
     # load meta data
     train_matching, train_discrim, valid_matching, valid_discrim = load_meta_data(args)
 
-    if rank == 0 and len(set(train_cats).intersection(set(valid_cats))) != len(
-        train_cats
-    ):
-        warnings.warn("There's a category in valid data which is not in train data")
-
     # txt_encoder
     train_txt_preprocessor = TextPreprocessor(
         args.backbone_txt, max_length=args.txt_max_length, dropout=args.word_dropout
