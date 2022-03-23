@@ -156,11 +156,11 @@ def valid_one_epoch(
     d_top5_top1_accs = []  # P.D. Top5-Top1 accuracy
     d_top5_top5_accs = []  # P.D. Top5-Top5 accuracy
 
-    for (m_plc, m_pri), (d_plc, d_pri) in tqdm(
+    for (m_plc, m_pri), (d_plc, d_pri, d_scores) in tqdm(
         zip(m_loader, d_loader), desc=f"[Valid: {cur_epoch}/{tot_epoch-1}]"
     ):
         matching = compose_batch(m_plc, m_pri, device=device)
-        discrim = compose_batch(d_plc, d_pri, device=device)
+        discrim = compose_batch(d_plc, d_pri, device=device, scores=d_scores)
         with autocast(enabled=True):
             with torch.no_grad():
                 (
