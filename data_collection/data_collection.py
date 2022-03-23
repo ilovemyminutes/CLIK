@@ -1,16 +1,17 @@
 import argparse
-import os
 import json
+import os
 import warnings
-from time import time
 from collections import defaultdict
+from datetime import datetime, timedelta
+from time import time
 from typing import Dict
+
+import cv2
+import numpy as np
+import pandas as pd
 import requests
 from tqdm import tqdm
-from datetime import datetime, timedelta
-import cv2
-import pandas as pd
-import numpy as np
 from utils import load_pickle, save_pickle
 
 PROD_REQ_URL = "http://ss-api.flova-pipeline.svc.ad1.io.navercorp.com/v1.1/vertical/products/_lookup"

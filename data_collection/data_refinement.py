@@ -1,7 +1,9 @@
-from typing import Union, Tuple
+from typing import Tuple, Union
+
 import numpy as np
 import pandas as pd
-from utils.data_utils import train_test_split_groupby_plan, resolve_data_leakage
+from utils.data_utils import (resolve_data_leakage,
+                              train_test_split_groupby_plan)
 
 DEFAULT_REFINE_RULE = {
     "target": "ctr",

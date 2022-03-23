@@ -1,8 +1,8 @@
+import timm
 import torch
 from torch import nn
 from torchvision import models
-import timm
-from transformers import BertModel, BertConfig
+from transformers import BertConfig, BertModel
 
 
 class NonLinearMLP(nn.Module):

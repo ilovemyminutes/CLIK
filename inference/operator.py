@@ -1,12 +1,13 @@
-from typing import Tuple, Union, List, Dict
 from datetime import datetime, timedelta
-import requests
-import numpy as np
-import cv2
+from typing import Dict, List, Tuple, Union
+
 import albumentations as A
+import cv2
+import numpy as np
+import requests
 import torch
-from preprocessing import TextPreprocessor
 from networks import CLIK
+from preprocessing import TextPreprocessor
 from utils.data_utils import txt_input_to_device
 
 

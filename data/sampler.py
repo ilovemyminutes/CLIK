@@ -1,9 +1,11 @@
 import random
-from copy import deepcopy
 import warnings
+from copy import deepcopy
+
 import numpy as np
 from torch.utils.data import Sampler
-from data import SemanticMatchingDataset, PreferenceDiscrimDataset
+
+from data import PreferenceDiscrimDataset, SemanticMatchingDataset
 
 
 class SemanticMatchingBatchSampler(Sampler):

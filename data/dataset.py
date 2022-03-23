@@ -1,15 +1,16 @@
-from abc import *
 import os
 import warnings
-from tqdm import tqdm
+from abc import *
 from typing import List, Union
+
+import albumentations as A
+import cv2
 import numpy as np
 import pandas as pd
-import cv2
-import albumentations as A
 import torch
-from torch.utils.data import Dataset
 from preprocessing import TextPreprocessor, remap_plan_keys, remap_prod_keys
+from torch.utils.data import Dataset
+from tqdm import tqdm
 
 DEFAULT_PLAN_ATTRS = [
     "plan_name",
@@ -69,7 +70,6 @@ class _PlanBaseDataset(Dataset, metaclass=ABCMeta):
         sampling_method: str = "weighted",  # 'weighted', 'random', 'sequential'
     ):
         """
-
         Args:
             meta (pd.DataFrame): 메타 데이터
             target (str): compatibility target
