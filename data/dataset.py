@@ -350,6 +350,58 @@ class PreferenceDiscrimDataset(_PlanBaseDataset):
         return plc, pri
 
 
+class PDAblation2Dataset(_PlanBaseDataset):
+    def __init__(
+        self,
+        meta: pd.DataFrame,
+        target: str,
+        img_dir: str,
+        img_transforms: A.Compose,
+        txt_preprocessor: TextPreprocessor,
+        plan_attrs: List[str],
+        discrim_size: int = 30,
+        sampling_method: str = "weighted",
+    ):
+        super(PDAblation2Dataset, self).__init__(
+            meta=meta,
+            target=target,
+            img_dir=img_dir,
+            img_transforms=img_transforms,
+            txt_preprocessor=txt_preprocessor,
+            plan_attrs=plan_attrs,
+            prod_attrs=None,
+            sampling_method=sampling_method,
+        )
+        self.discrim_size = discrim_size
+
+    def __len__(self):
+        return len(self.unique_plan_ids)
+
+    def __getitem__(self, plan_id: int) -> dict:
+        """
+        plan: 기획전 정보
+        plc: plan contents. 기획전 정보
+        pri: product image. 상품 이미지
+        """
+        assert (
+            plan_id in self.unique_plan_ids
+        ), f"There's no plan_id '{plan_id}' in meta data"
+        plan = self.meta_access_by_plan_id[plan_id].reset_index(drop=True)
+
+        plc_raw = plan.head(1)[self.plan_attrs].squeeze().to_dict()
+        plc = self.txt_preprocessor(**remap_plan_keys(plc_raw))
+
+        plan_prods = self.sample_prods(plan, n=self.discrim_size)
+        pri, scores = [], []
+        for _, prod in plan_prods.iterrows():
+            pri_raw, _ = self.load_prod_img(prod["prod_id"])
+            pri.append(self.img_transforms(image=pri_raw)["image"])
+            scores.append(prod[self.target])
+
+        pri = torch.stack(pri)
+        return plc, pri, scores
+
+
 class SemanticMatchingEvalDataset(_PlanBaseDataset):
     def __init__(
         self,
