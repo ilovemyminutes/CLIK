@@ -1,23 +1,26 @@
-from typing import Tuple, List, Union, Dict
 import warnings
-from tqdm import tqdm
+from typing import Dict, List, Tuple, Union
+
+import albumentations as A
 import numpy as np
 import pandas as pd
-import albumentations as A
-from sklearn.model_selection import train_test_split
 import torch
-from torch.utils.data import DataLoader
-from preprocessing import TextPreprocessor
+import torch.distributed as dist
 from data import (
-    SemanticMatchingDataset,
+    PreferenceDiscrimBatchSampler,
     PreferenceDiscrimDataset,
     SemanticMatchingBatchSampler,
-    PreferenceDiscrimBatchSampler,
+    SemanticMatchingDataset,
 )
-import torch.distributed as dist
+from data.dataset import PDAblation2Dataset  # NOTE. for Ablation2
+from data_collection.data_collection import PLAN_CATS_EN2KR
+from preprocessing import TextPreprocessor
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 from .ddp_utils import DistributedBatchSampler
 from .flags import Flags
-from data_collection.data_collection import PLAN_CATS_EN2KR
 
 
 def compose_dataloaders(
@@ -51,6 +54,96 @@ def compose_dataloaders(
         p_txt_aug=p_txt_aug,
     )
     discrimset = PreferenceDiscrimDataset(
+        meta=meta_discrim,
+        target=target,
+        img_dir=img_dir,
+        img_transforms=img_transforms,
+        txt_preprocessor=txt_preprocessor,
+        plan_attrs=plan_attrs,
+        discrim_size=discrim_size,
+        sampling_method=sampling_method,
+    )
+
+    # compose batch sampler
+    discrim_sampler = PreferenceDiscrimBatchSampler(discrimset, discrim_iter)
+
+    # 두 데이터셋의 배치 사이즈 동기화
+    if is_distributed and len(discrim_sampler) < matching_size:
+        matching_sampler = SemanticMatchingBatchSampler(
+            dataset=matchingset,
+            matching_size=(len(discrim_sampler) // dist.get_world_size())
+            * dist.get_world_size(),
+            num_steps=len(discrim_sampler),
+        )
+        warnings.warn(
+            f"'matching_size' should be multiple of world_size({dist.get_world_size()}) during DDP. 'matching_size' will be modified: {matching_size} -> {(len(discrim_sampler) // dist.get_world_size()) * dist.get_world_size()}"
+        )
+    else:
+        matching_sampler = SemanticMatchingBatchSampler(
+            matchingset, matching_size, num_steps=len(discrim_sampler)
+        )
+
+    # compoase DataLoader
+    if is_distributed:
+        discrim_sampler = DistributedBatchSampler(
+            discrim_sampler, num_replicas=dist.get_world_size(), rank=rank
+        )
+        matching_sampler = DistributedBatchSampler(
+            matching_sampler, num_replicas=dist.get_world_size(), rank=rank
+        )
+        matching_loader = DataLoader(
+            matchingset,
+            batch_sampler=matching_sampler,
+            num_workers=num_workers,
+        )
+        discrim_loader = DataLoader(
+            discrimset,
+            batch_sampler=discrim_sampler,
+            num_workers=num_workers,
+        )
+
+    else:
+        matching_loader = DataLoader(
+            matchingset, batch_sampler=matching_sampler, num_workers=num_workers
+        )
+        discrim_loader = DataLoader(
+            discrimset, batch_sampler=discrim_sampler, num_workers=num_workers
+        )
+
+    return matching_loader, discrim_loader
+
+
+def compose_dataloaders_ablation2(
+    meta_matching: pd.DataFrame,
+    meta_discrim: pd.DataFrame,
+    target: str,
+    img_dir: str,
+    img_transforms: A.Compose,
+    txt_preprocessor: TextPreprocessor,
+    plan_attrs: List[str],
+    prod_attrs: List[str] = None,
+    matching_size: int = 512,
+    discrim_size: int = 20,
+    discrim_iter: int = 12,
+    sampling_method: str = "weighted",
+    p_txt_aug: float = 0.0,
+    num_workers: int = 1,
+    rank: int = None,
+) -> Tuple[DataLoader, DataLoader]:
+    is_distributed = True if rank is not None else False
+
+    # compose dataset
+    matchingset = SemanticMatchingDataset(
+        meta=meta_matching,
+        target=target,
+        img_dir=img_dir,
+        img_transforms=img_transforms,
+        txt_preprocessor=txt_preprocessor,
+        plan_attrs=plan_attrs,
+        prod_attrs=prod_attrs,
+        p_txt_aug=p_txt_aug,
+    )
+    discrimset = PDAblation2Dataset(
         meta=meta_discrim,
         target=target,
         img_dir=img_dir,
