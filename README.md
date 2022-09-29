@@ -1,8 +1,5 @@
 # CLIK: Contrastive Learning for Topic-Dependent Image Ranking
 * Published: [The 4th Workshop on RecSys 2022 in Fashion & Retail, *fashionXrecsys*](https://recsys.acm.org/recsys22/fashionxrecsys/)
-* CLIK은 하나의 주제를 고려한 이미지 랭킹 방법론으로, [네이버쇼핑 기획전 서비스](https://shopping.naver.com/plan2/p/index.naver) 내 대표 이미지 자동 선출을 위해 제작되었습니다.
-* 모델에 대한 좀더 자세한 설명은 [CLIK.pdf](https://github.com/iloveslowfood/CLIK/blob/main/etc/CLIK.pdf)에서 확인하실 수 있습니다.
-![](https://github.com/iloveslowfood/CLIK/blob/main/etc/arch.png?raw=true)
 
 ---
 ## Data Collection
