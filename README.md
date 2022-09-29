@@ -1,5 +1,5 @@
 # CLIK: Contrastive Learning for Topic-Dependent Image Ranking
-* Published: [The 4th Workshop on RecSys 2022 in Fashion & Retail, *fashionXrecsys*](https://recsys.acm.org/recsys22/fashionxrecsys/)
+* Published(expected): [The 4th Workshop on RecSys 2022 in Fashion & Retail, *fashionXrecsys*](https://recsys.acm.org/recsys22/fashionxrecsys/)
 
 ---
 ## Data Collection
