@@ -68,7 +68,7 @@ class CLIK(_CLIK):
     def __init__(
         self,
         feature_dim: int,
-        queue_size: int,
+        memory_bank_size: int,
         backbone_txt: str = "dsksd/bert-ko-small-minimal",
         backbone_img: str = "vit_small_patch16_224_in21k",
         pretrained: bool = True,
@@ -82,7 +82,7 @@ class CLIK(_CLIK):
         self.agg = nn.Linear(2 * feature_dim, feature_dim)
 
         # memory bank
-        self.register_buffer("memory_bank", torch.randn(queue_size, feature_dim))
+        self.register_buffer("memory_bank", torch.randn(memory_bank_size, feature_dim))
         self.memory_bank = F.normalize(self.memory_bank)
 
         self.is_distributed = True if rank is not None else False
