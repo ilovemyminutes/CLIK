@@ -17,8 +17,8 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
         temperature: float = 0.07,
     ):
         super(_CLIK, self).__init__()
-        self.enc_context = TextEncoder(backbone_txt, feature_dim, pretrained)
-        self.enc_instance = ImageEncoder(backbone_img, feature_dim, pretrained)
+        self.txt_encoder = TextEncoder(backbone_txt, feature_dim, pretrained)
+        self.img_encoder = ImageEncoder(backbone_img, feature_dim, pretrained)
         self.temperature = temperature
 
     @abstractmethod
@@ -26,7 +26,7 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
         self,
         matching: Dict[str, torch.Tensor],
         discrim: Dict[str, torch.Tensor],
-        update_queue: bool,
+        update_bank: bool,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
@@ -49,7 +49,7 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
         raise NotImplementedError
 
     @abstractmethod
-    def _update_queue(self) -> None:
+    def _update_bank(self) -> None:
         raise NotImplementedError
 
     @property
@@ -89,14 +89,14 @@ class CLIK(_CLIK):
         self.rank = rank
 
     def forward(
-        self, matching, discrim, update_queue: bool = True
+        self, matching, discrim, update_bank: bool = True
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         (
             m_logits_cont_wise,
             m_logits_inst_wise,
             m_labels,
             m_loss,
-        ) = self.get_topic_matching_result(matching, update_queue)
+        ) = self.get_topic_matching_result(matching, update_bank)
         d_logits, d_labels, d_loss = self.get_image_ranking_result(discrim)
         return (
             m_logits_cont_wise,
@@ -118,24 +118,24 @@ class CLIK(_CLIK):
     def get_topic_matching_result(
         self,
         matching: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]],
-        update_queue: bool = True,
+        update_bank: bool = True,
         return_loss: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Semantic Matching - understanding between shared contexts and instances
 
         Args:
             matching (Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]): batch for Semantic Matching
-            update_queue (bool, optional): [description]. Defaults to True.
+            update_bank (bool, optional): [description]. Defaults to True.
             return_loss (bool, optional): [description]. Defaults to True.
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: [description]
         """
         contexts = F.normalize(
-            self.enc_context(matching["contexts"])
+            self.txt_encoder(matching["contexts"])
         )  # [local B, feature_dim]
         instances = F.normalize(
-            self.enc_instance(matching["instances"])
+            self.img_encoder(matching["instances"])
         )  # [local B, feature_dim]
 
         if self.is_distributed:
@@ -168,8 +168,8 @@ class CLIK(_CLIK):
             assert logits_contexts_wise.size(0) == logits_instances_wise.size(0)
             assert labels.size(0) == logits_contexts_wise.size(0)
 
-            if update_queue:
-                self._update_queue(instances_gathered)
+            if update_bank:
+                self._update_bank(instances_gathered)
 
         else:
             logits_contexts_wise = torch.mm(
@@ -184,8 +184,8 @@ class CLIK(_CLIK):
             assert logits_contexts_wise.size(0) == logits_instances_wise.size(0)
             assert labels.size(0) == logits_contexts_wise.size(0)
 
-            if update_queue:
-                self._update_queue(instances)
+            if update_bank:
+                self._update_bank(instances)
 
         output = [logits_contexts_wise, logits_instances_wise, labels]
         if return_loss:
@@ -210,7 +210,7 @@ class CLIK(_CLIK):
         C/H/W: channel/height/width of image
         """
         contexts = F.normalize(
-            self.enc_context(discrim["contexts"])
+            self.txt_encoder(discrim["contexts"])
         )  # [D, feature_dim]
 
         if discrim["instances"].ndim == 5:  # [D, K, C, H, W]
@@ -225,7 +225,7 @@ class CLIK(_CLIK):
                     self.agg(torch.cat([context_row, virt_instance], dim=1))
                 )
 
-                instances_row = F.normalize(self.enc_instance(instances_row))
+                instances_row = F.normalize(self.img_encoder(instances_row))
 
                 logits.append(torch.mm(joint_emb, instances_row.T))
                 energy.append(energy_row)
@@ -243,7 +243,7 @@ class CLIK(_CLIK):
             joint_emb = F.normalize(
                 self.agg(torch.cat([contexts, virt_instance], dim=1))
             )
-            instances = F.normalize(self.enc_instance(discrim["instances"]))
+            instances = F.normalize(self.img_encoder(discrim["instances"]))
 
             logits = torch.mm(joint_emb, instances.T)
             labels = torch.zeros(1, dtype=torch.long).to(self.device)
@@ -257,7 +257,7 @@ class CLIK(_CLIK):
             output.append(energy)
         return output
 
-    def _update_queue(self, instances: torch.Tensor) -> None:
+    def _update_bank(self, instances: torch.Tensor) -> None:
         assert self.memory_bank.size(0) == instances.size(
             0
         ), f"For update, size should be the same between memory_bank({self.memory_bank.size(0)}) and instances({instances.size(0)})"
