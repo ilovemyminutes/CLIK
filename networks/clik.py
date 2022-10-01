@@ -8,29 +8,46 @@ from torch import nn
 
 from .encoder import ImageEncoder, TextEncoder
 
+MatchingBatch = Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]
+RankingBatch = Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]
+
 MatchingOutput = Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 MatchingOutputWithLoss = Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+RankingOutput = Tuple[torch.Tensor, torch.Tensor]
+RankingOutputWithLoss = Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
-class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-variants
+class _CLIK(nn.Module, metaclass=ABCMeta):
+    """
+    An abstract class for CLIK that is made for further CLIK-variation
+    """
     def __init__(
             self,
             feature_dim: int,
             backbone_txt: str,
             backbone_img: str,
+            memory_bank_size: int,
             pretrained: bool,
             temperature: float = 0.07,
     ):
         super(_CLIK, self).__init__()
+        # Dual-encoder
         self.txt_encoder = TextEncoder(backbone_txt, feature_dim, pretrained)
         self.img_encoder = ImageEncoder(backbone_img, feature_dim, pretrained)
+
+        # Aggregation Module (fully connected layer)
+        self.agg = nn.Linear(2 * feature_dim, feature_dim)
+
+        # Memory Bank
+        self.register_buffer('memory_bank', torch.randn(memory_bank_size, feature_dim))
+        self.memory_bank = F.normalize(self.memory_bank)
         self.temperature = temperature
 
     @abstractmethod
     def forward(
             self,
-            matching: Dict[str, torch.Tensor],
-            discrim: Dict[str, torch.Tensor],
+            matching_batch: Dict[str, torch.Tensor],
+            ranking_batch: Dict[str, torch.Tensor],
             update_bank: bool,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError
@@ -43,19 +60,25 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
 
     @abstractmethod
     def get_topic_matching_result(
-            self, matching: Dict[str, torch.Tensor], update: bool
+            self, matching_batch: Dict[str, torch.Tensor], update_bank: bool
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
     @abstractmethod
     def get_image_ranking_result(
-            self, discrim: Dict[str, torch.Tensor], *args
+            self, ranking_batch: Dict[str, torch.Tensor], *args
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
-    @abstractmethod
     def _update_bank(self, images: torch.Tensor) -> None:
-        raise NotImplementedError
+        if self.memory_bank.size(0) != images.size(0):
+            raise ValueError(f'For update, the size of images ({images.size(0)}) should be the same as '
+                             f'that of memory_bank ({self.memory_bank.size(0)}).')
+        self.memory_bank: torch.Tensor = images.detach().float()
+
+    def contrastive_loss(self, logits: torch.Tensor, labels: torch.Tensor):
+        loss = F.cross_entropy(logits / self.temperature, labels)
+        return loss
 
     @property
     def device(self):
@@ -64,72 +87,47 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
             d = torch.device("cpu")
         return d
 
-    def contrastive_loss(self, logits: torch.Tensor, labels: torch.Tensor):
-        loss = F.cross_entropy(logits / self.temperature, labels)
-        return loss
-
 
 class CLIK(_CLIK):
     def __init__(
             self,
             feature_dim: int,
             memory_bank_size: int,
-            backbone_txt: str = "dsksd/bert-ko-small-minimal",
-            backbone_img: str = "vit_small_patch16_224_in21k",
+            backbone_txt: str = 'dsksd/bert-ko-small-minimal',
+            backbone_img: str = 'vit_small_patch16_224_in21k',
             pretrained: bool = True,
             temperature: float = 0.07,
             rank: int = None,
     ):
-        super(CLIK, self).__init__(
-            feature_dim, backbone_txt, backbone_img, pretrained, temperature
-        )
-        # aggregation module
-        self.agg = nn.Linear(2 * feature_dim, feature_dim)
-
-        # memory bank
-        self.register_buffer("memory_bank", torch.randn(memory_bank_size, feature_dim))
-        self.memory_bank = F.normalize(self.memory_bank)
-
-        self.is_distributed = True if rank is not None else False
+        super(CLIK, self).__init__(feature_dim, backbone_txt, backbone_img, memory_bank_size, pretrained, temperature)
         self.rank = rank
+        self.is_distributed = True if rank is not None else False
 
     def forward(
-            self, matching, discrim, update_bank: bool = True
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        (
-            m_logits_topic_wise,
-            m_logits_image_wise,
-            m_labels,
-            m_loss,
-        ) = self.get_topic_matching_result(matching, update_bank)
-        d_logits, d_labels, d_loss = self.get_image_ranking_result(discrim)
-        return (
-            m_logits_cont_wise,
-            m_logits_inst_wise,
-            m_labels,
-            m_loss,
-            d_logits,
-            d_labels,
-            d_loss,
-        )
+            self,
+            matching_batch,
+            ranking_batch,
+            update_bank: bool = True
+    ) -> Tuple[MatchingOutputWithLoss, RankingOutputWithLoss]:
+        matching_result: MatchingOutputWithLoss = self.get_topic_matching_result(matching_batch, update_bank)
+        ranking_result: RankingOutputWithLoss = self.get_image_ranking_result(ranking_batch)
+        return matching_result, ranking_result
 
     @torch.no_grad()
-    def predict(
-            self, batch: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]
-    ) -> torch.Tensor:
-        logits, _ = self.get_image_ranking_result(batch, return_loss=False)
-        return logits
+    def predict(self, ranking_batch: RankingBatch) -> torch.Tensor:
+        compatibility_scores, _ = self.get_image_ranking_result(ranking_batch, return_loss=False)
+        return compatibility_scores
 
     def get_topic_matching_result(
             self,
-            matching: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]],
+            matching_batch: MatchingBatch,
             update_bank: bool = True,
             return_loss: bool = True,
     ) -> Union[MatchingOutput, MatchingOutputWithLoss]:
         """Topic Matching: understanding between topics and images
 
         Args:
-            matching (Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]): batch for Semantic Matching
+            matching_batch (MatchingBatch): batch for Semantic Matching
             update_bank (bool, optional): [description]. Defaults to True.
             return_loss (bool, optional): [description]. Defaults to True.
 
@@ -141,11 +139,10 @@ class CLIK(_CLIK):
         * B: total batch_size (if you use single gpu, it is equal to local B)
         * h: feature_dim
         """
-        topics: torch.Tensor = F.normalize(self.txt_encoder(matching["contexts"]))  # [local B, h]
-        images: torch.Tensor = F.normalize(self.img_encoder(matching["instances"]))  # [local B, h]
+        topics: torch.Tensor = F.normalize(self.txt_encoder(matching_batch['topics']))  # [local B, h]
+        images: torch.Tensor = F.normalize(self.img_encoder(matching_batch['images']))  # [local B, h]
 
-        # distributed training
-        if self.is_distributed:
+        if self.is_distributed:  # distributed training
             # gather data from multiple processes
             topics_gathered: List[torch.Tensor] = [
                 torch.zeros_like(topics) for _ in range(dist.get_world_size())
@@ -166,93 +163,77 @@ class CLIK(_CLIK):
             labels: torch.Tensor = (torch.arange(len(topics_gathered), dtype=torch.long)
                                     [len(topics) * self.rank: len(topics) * (self.rank + 1)]
                                     .to(self.device))  # [local B]
-
-            # update Memory Bank
             if update_bank:
                 self._update_bank(images_gathered)
-
-        # single-gpu training
-        else:
+        else:  # single-gpu training
             # logits & labels for Loss_{matching}
             logits_topic_wise: torch.Tensor = torch.mm(topics, images.T)  # [local B, local B]
             logits_image_wise: torch.Tensor = logits_topic_wise.T  # [local B, local B]
             labels = torch.arange(len(logits_topic_wise), dtype=torch.long).to(self.device)  # [local B]
-
-            # update Memory Bank
             if update_bank:
                 self._update_bank(images)
 
-        # return output
         if return_loss:
             loss_s2i: torch.Tensor = self.contrastive_loss(logits_topic_wise, labels)
             loss_i2s: torch.Tensor = self.contrastive_loss(logits_image_wise, labels)
-            loss_clik: torch.Tensor = (loss_s2i + loss_i2s) / 2
-            output: MatchingOutputWithLoss = (logits_topic_wise, logits_image_wise, labels, loss_clik)
+            loss_matching: torch.Tensor = (loss_s2i + loss_i2s) / 2
+            output: MatchingOutputWithLoss = (logits_topic_wise, logits_image_wise, labels, loss_matching)
         else:
             output: MatchingOutput = (logits_topic_wise, logits_image_wise, labels)
         return output
 
     def get_image_ranking_result(
-            self,
-            discrim: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]],
-            return_loss: bool = True,
-            return_energy: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            self, ranking_batch: RankingBatch, return_loss: bool = True
+    ) -> Union[RankingOutput, RankingOutputWithLoss]:
         """
-        D: # iterations of discrim
-        K: # candidate instances
+        G: # sampled groups
+        K: # sampled images for each group
+        M: size of Memory Bank
         C/H/W: channel/height/width of image
+        h: feature_dim
         """
-        contexts = F.normalize(
-            self.txt_encoder(discrim["contexts"])
-        )  # [D, feature_dim]
+        if ranking_batch['images'].ndim != 5 and ranking_batch['images'].ndim != 4:
+            raise NotImplementedError(f"ranking_batch['images'] has wrong dimension: {ranking_batch['images'].ndim}")
 
-        if discrim["instances"].ndim == 5:  # [D, K, C, H, W]
-            logits, energy = [], []
-            for context_row, instances_row in zip(
-                    contexts.unbind(dim=0), discrim["instances"].unbind(dim=0)
-            ):
-                context_row = context_row.unsqueeze(0)
-                energy_row = F.softmax(torch.mm(context_row, self.memory_bank.T), dim=1)
-                virt_instance = F.normalize(torch.mm(energy_row, self.memory_bank))
-                joint_emb = F.normalize(
-                    self.agg(torch.cat([context_row, virt_instance], dim=1))
-                )
+        topics = F.normalize(self.txt_encoder(ranking_batch['topics']))  # [G, h]
 
-                instances_row = F.normalize(self.img_encoder(instances_row))
+        if ranking_batch['images'].ndim == 5:  # G > 1 (batch['images']: [G, K, C, H, W])
+            num_groups: int = ranking_batch['images'].size(0)
+            compatibility_scores: List[torch.Tensor] = []
+            for topic, images in zip(topics.unbind(dim=0), ranking_batch['images'].unbind(dim=0)):
+                topic = topic.unsqueeze(0)  # [1, h]
+                images = F.normalize(self.img_encoder(images))  # [K, h]
+                group_query: torch.Tensor = self.generate_group_query(topic)
+                compatibility_scores.append(torch.mm(group_query, images.T))  # append [1, K]
+            compatibility_scores: torch.Tensor = torch.vstack(compatibility_scores)
+        else:  # G == 1 (batch['images']: [K, C, H, W])
+            num_groups = 1
+            images: torch.Tensor = F.normalize(self.img_encoder(ranking_batch['images']))  # [K, h]
+            group_query: torch.Tensor = self.generate_group_query(topics)  # [1, h]
+            compatibility_scores: torch.Tensor = torch.mm(group_query, images.T)  # [1, K]
 
-                logits.append(torch.mm(joint_emb, instances_row.T))
-                energy.append(energy_row)
+        # logits & labels for Loss_{ranking}
+        logits: torch.Tensor = compatibility_scores
+        labels: torch.Tensor = torch.zeros(num_groups, dtype=torch.long).to(self.device)
 
-            logits = torch.vstack(logits)
-            labels = torch.zeros(discrim["instances"].size(0), dtype=torch.long).to(
-                self.device
-            )  # [D]
-
-        elif (
-                discrim["instances"].ndim == 4
-        ):  # instances: [K, C, H, W], contexts: [1, feature_dim]
-            energy = F.softmax(torch.mm(contexts, self.memory_bank.T), dim=1)
-            virt_instance = F.normalize(torch.mm(energy, self.memory_bank))
-            joint_emb = F.normalize(
-                self.agg(torch.cat([contexts, virt_instance], dim=1))
-            )
-            instances = F.normalize(self.img_encoder(discrim["instances"]))
-
-            logits = torch.mm(joint_emb, instances.T)
-            labels = torch.zeros(1, dtype=torch.long).to(self.device)
-
-        output = [logits, labels]
-        if return_loss:  # loss should be calculated in forward() during DDP
-            output.append(self.contrastive_loss(logits, labels))
-        if return_energy:  # NOTE. mainly for debugging
-            if isinstance(energy, list):
-                energy = torch.vstack(energy)
-            output.append(energy)
+        if return_loss:
+            loss_ranking: torch.Tensor = self.contrastive_loss(logits, labels)
+            output: RankingOutputWithLoss = (logits, labels, loss_ranking)
+        else:
+            output: RankingOutput = (logits, labels)
         return output
 
-    def _update_bank(self, images: torch.Tensor) -> None:
-        if self.memory_bank.size(0) != images.size(0):
-            raise ValueError(f'For update, the size of images ({images.size(0)}) should be the same as '
-                             f'that of memory_bank ({self.memory_bank.size(0)}).')
-        self.memory_bank: torch.Tensor = images.detach().float()
+    def generate_group_query(self, topic_embedding: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            topic_embedding: [1, feature_dim]
+        Returns:
+            group_query: [1, feature_dim]
+
+        """
+        energy = F.softmax(torch.mm(topic_embedding, self.memory_bank.T), dim=1)  # [1, M]
+        virtual_img = F.normalize(torch.mm(energy, self.memory_bank))  # [1, h]
+        group_query = F.normalize(self.agg(torch.cat([topic_embedding, virtual_img], dim=1)))  # [1, h]
+        return group_query
+
+
