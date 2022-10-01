@@ -54,7 +54,7 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
         raise NotImplementedError
 
     @abstractmethod
-    def _update_bank(self) -> None:
+    def _update_bank(self, images: torch.Tensor) -> None:
         raise NotImplementedError
 
     @property
@@ -97,8 +97,8 @@ class CLIK(_CLIK):
             self, matching, discrim, update_bank: bool = True
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         (
-            m_logits_cont_wise,
-            m_logits_inst_wise,
+            m_logits_topic_wise,
+            m_logits_image_wise,
             m_labels,
             m_loss,
         ) = self.get_topic_matching_result(matching, update_bank)
@@ -139,10 +139,10 @@ class CLIK(_CLIK):
         Notations for explaination
         * local B: batch_size for each process (if you use single gpu, it is equal to total batch_size)
         * B: total batch_size (if you use single gpu, it is equal to local B)
-        * H: feature_dim
+        * h: feature_dim
         """
-        topics: torch.Tensor = F.normalize(self.txt_encoder(matching["contexts"]))  # [local B, H]
-        images: torch.Tensor = F.normalize(self.img_encoder(matching["instances"]))  # [local B, H]
+        topics: torch.Tensor = F.normalize(self.txt_encoder(matching["contexts"]))  # [local B, h]
+        images: torch.Tensor = F.normalize(self.img_encoder(matching["instances"]))  # [local B, h]
 
         # distributed training
         if self.is_distributed:
@@ -157,8 +157,8 @@ class CLIK(_CLIK):
             dist.all_gather(tensor_list=images_gathered, tensor=images)
             topics_gathered[self.rank]: torch.Tensor = topics
             images_gathered[self.rank]: torch.Tensor = images
-            topics_gathered: torch.Tensor = torch.cat(topics_gathered)  # [B, H]
-            images_gathered: torch.Tensor = torch.cat(images_gathered)  # [B, H]
+            topics_gathered: torch.Tensor = torch.cat(topics_gathered)  # [B, h]
+            images_gathered: torch.Tensor = torch.cat(images_gathered)  # [B, h]
 
             # logits & labels for Loss_{matching}
             logits_topic_wise: torch.Tensor = torch.mm(topics, images_gathered.T)  # [local B, B]
@@ -251,8 +251,8 @@ class CLIK(_CLIK):
             output.append(energy)
         return output
 
-    def _update_bank(self, instances: torch.Tensor) -> None:
-        assert self.memory_bank.size(0) == instances.size(
-            0
-        ), f"For update, size should be the same between memory_bank({self.memory_bank.size(0)}) and instances({instances.size(0)})"
-        self.memory_bank = instances.detach().float()
+    def _update_bank(self, images: torch.Tensor) -> None:
+        if self.memory_bank.size(0) != images.size(0):
+            raise ValueError(f'For update, the size of images ({images.size(0)}) should be the same as '
+                             f'that of memory_bank ({self.memory_bank.size(0)}).')
+        self.memory_bank: torch.Tensor = images.detach().float()
