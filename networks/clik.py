@@ -37,13 +37,13 @@ class _CLIK(nn.Module, metaclass=ABCMeta):  # NOTE. made for further CLIK-varian
         raise NotImplementedError
 
     @abstractmethod
-    def get_semantic_matching_result(
+    def get_topic_matching_result(
         self, matching: Dict[str, torch.Tensor], update: bool
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_preference_discrimination_result(
+    def get_image_ranking_result(
         self, discrim: Dict[str, torch.Tensor], *args
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
@@ -81,9 +81,9 @@ class CLIK(_CLIK):
         # aggregation module
         self.agg = nn.Linear(2 * feature_dim, feature_dim)
 
-        # instance queue
-        self.register_buffer("inst_queue", torch.randn(queue_size, feature_dim))
-        self.inst_queue = F.normalize(self.inst_queue)
+        # memory bank
+        self.register_buffer("memory_bank", torch.randn(queue_size, feature_dim))
+        self.memory_bank = F.normalize(self.memory_bank)
 
         self.is_distributed = True if rank is not None else False
         self.rank = rank
@@ -96,8 +96,8 @@ class CLIK(_CLIK):
             m_logits_inst_wise,
             m_labels,
             m_loss,
-        ) = self.get_semantic_matching_result(matching, update_queue)
-        d_logits, d_labels, d_loss = self.get_preference_discrimination_result(discrim)
+        ) = self.get_topic_matching_result(matching, update_queue)
+        d_logits, d_labels, d_loss = self.get_image_ranking_result(discrim)
         return (
             m_logits_cont_wise,
             m_logits_inst_wise,
@@ -112,10 +112,10 @@ class CLIK(_CLIK):
     def predict(
         self, batch: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]
     ) -> torch.Tensor:
-        logits, _ = self.get_preference_discrimination_result(batch, return_loss=False)
+        logits, _ = self.get_image_ranking_result(batch, return_loss=False)
         return logits
 
-    def get_semantic_matching_result(
+    def get_topic_matching_result(
         self,
         matching: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]],
         update_queue: bool = True,
@@ -125,7 +125,7 @@ class CLIK(_CLIK):
 
         Args:
             matching (Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]): batch for Semantic Matching
-            update (bool, optional): [description]. Defaults to True.
+            update_queue (bool, optional): [description]. Defaults to True.
             return_loss (bool, optional): [description]. Defaults to True.
 
         Returns:
@@ -198,7 +198,7 @@ class CLIK(_CLIK):
             )
         return output
 
-    def get_preference_discrimination_result(
+    def get_image_ranking_result(
         self,
         discrim: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]],
         return_loss: bool = True,
@@ -219,8 +219,8 @@ class CLIK(_CLIK):
                 contexts.unbind(dim=0), discrim["instances"].unbind(dim=0)
             ):
                 context_row = context_row.unsqueeze(0)
-                energy_row = F.softmax(torch.mm(context_row, self.inst_queue.T), dim=1)
-                virt_instance = F.normalize(torch.mm(energy_row, self.inst_queue))
+                energy_row = F.softmax(torch.mm(context_row, self.memory_bank.T), dim=1)
+                virt_instance = F.normalize(torch.mm(energy_row, self.memory_bank))
                 joint_emb = F.normalize(
                     self.agg(torch.cat([context_row, virt_instance], dim=1))
                 )
@@ -238,8 +238,8 @@ class CLIK(_CLIK):
         elif (
             discrim["instances"].ndim == 4
         ):  # instances: [K, C, H, W], contexts: [1, feature_dim]
-            energy = F.softmax(torch.mm(contexts, self.inst_queue.T), dim=1)
-            virt_instance = F.normalize(torch.mm(energy, self.inst_queue))
+            energy = F.softmax(torch.mm(contexts, self.memory_bank.T), dim=1)
+            virt_instance = F.normalize(torch.mm(energy, self.memory_bank))
             joint_emb = F.normalize(
                 self.agg(torch.cat([contexts, virt_instance], dim=1))
             )
@@ -258,7 +258,7 @@ class CLIK(_CLIK):
         return output
 
     def _update_queue(self, instances: torch.Tensor) -> None:
-        assert self.inst_queue.size(0) == instances.size(
+        assert self.memory_bank.size(0) == instances.size(
             0
-        ), f"For update, size should be the same between inst_queue({self.inst_queue.size(0)}) and instances({instances.size(0)})"
-        self.inst_queue = instances.detach().float()
+        ), f"For update, size should be the same between memory_bank({self.memory_bank.size(0)}) and instances({instances.size(0)})"
+        self.memory_bank = instances.detach().float()
