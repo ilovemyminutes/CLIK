@@ -96,7 +96,7 @@ class ExhibitionDataset(Dataset, metaclass=ABCMeta):
         """
         if labeling_criterion not in meta.columns:
             raise ValueError(f"'{labeling_criterion}' column is not in meta")
-        if sampling_method is not in SAMPLING_METHOD:
+        if sampling_method not in SAMPLING_METHOD:
             raise ValueError(f'sampling_method ({sampling_method}) should be one of {SAMPLING_METHOD}')
 
         if exhibit_attrs is None:
@@ -262,7 +262,7 @@ class TopicMatchingDataset(ExhibitionDataset):
         return len(self.meta)
 
     def __getitem__(self, exhibit_id: int) -> Tuple[Topic, Image]:
-        if exhibit_id is not in self.exhibit_ids:
+        if exhibit_id not in self.exhibit_ids:
             raise ValueError(f'exhibit_id ({exhibit_id}) is not in meta data')
         # sample product with topic info from a group
         group_sample: pd.Series = self.sample_prods(self.meta_by_exhibit_id[exhibit_id])
@@ -314,7 +314,7 @@ class ImageRankingDataset(ExhibitionDataset):
         return len(self.exhibit_ids)
 
     def __getitem__(self, exhibit_id: int) -> Tuple[Topic, Image]:
-        if exhibit_id is not in self.exhibit_ids:
+        if exhibit_id not in self.exhibit_ids:
             raise ValueError(f'exhibit_id ({exhibit_id}) is not in meta data')
         group: pd.DataFrame = self.meta_by_exhibit_id[exhibit_id].reset_index(drop=True)
 
@@ -359,7 +359,7 @@ class TopicMatchingEvalDataset(ExhibitionDataset):
         return len(self.meta)
 
     def __getitem__(self, exhibit_id: int) -> Tuple[Topic, Image, Dict[str, Union[int, float, RawTopic]]]:
-        if exhibit_id is not in self.exhibit_ids:
+        if exhibit_id not in self.exhibit_ids:
             raise ValueError(f'exhibit_id ({exhibit_id}) is not in meta data')
         desc = dict(
             id=0,
@@ -416,7 +416,7 @@ class ImageRankingEvalDataset(ExhibitionDataset):
         return len(self.exhibit_ids)
 
     def __getitem__(self, exhibit_id: int) -> Tuple[Topic, Image, Dict[str, Union[int, float, RawTopic]]]:
-        if exhibit_id is not in self.exhibit_ids:
+        if exhibit_id not in self.exhibit_ids:
             raise ValueError(f'exhibit_id ({exhibit_id}) is not in meta data')
         desc = dict(
             id=[],
