@@ -74,21 +74,16 @@ class TextPreprocessor:
         self.tokenizer: BertTokenizer = BertTokenizer.from_pretrained(pretrained_tokenizer)
         self.max_length = max_length
         self.dropout = dropout
-        assert self.tokenizer.unk_token_id is not None
-
-        # dict for mapping tokenization function
         self.__mapper = {
-            'name': self.tokenize_sentence,
-            'desc': self.tokenize_sentence,
-            'date': self.tokenize_date,
-            'cat1': self.tokenize_cat,
-            'cat2': self.tokenize_cat,
-            'cat3': self.tokenize_cat,
-            'cat4': self.tokenize_cat,
-            'kwds': self.tokenize_kwds,
+            'name': self._tokenize_sentence,
+            'desc': self._tokenize_sentence,
+            'date': self._tokenize_date,
+            'cat1': self._tokenize_cat,
+            'cat2': self._tokenize_cat,
+            'cat3': self._tokenize_cat,
+            'cat4': self._tokenize_cat,
+            'kwds': self._tokenize_kwds,
         }
-
-        # tokenization order
         self.__order = [
             'name',
             'desc',
@@ -126,7 +121,7 @@ class TextPreprocessor:
                 if len(tokenized) == 0:
                     continue
                 if self.dropout > 0.0:
-                    tokenized: TOKENS = self.apply_dropout(tokenized, self.dropout)
+                    tokenized: TOKENS = self._apply_dropout(tokenized, self.dropout)
                 encoded[attr].extend(tokenized)
                 current_length += len(tokenized)
 
@@ -187,12 +182,12 @@ class TextPreprocessor:
                 preprocessed[k]: torch.Tensor = preprocessed[k].unsqueeze(0)
         return preprocessed
 
-    def tokenize_sentence(self, sentence: str) -> TOKENS:
+    def _tokenize_sentence(self, sentence: str) -> TOKENS:
         sentence: str = remove_special_chars(sentence)
         sentence: TOKENS = self.tokenizer.encode(sentence, add_special_tokens=False)
         return sentence
 
-    def tokenize_date(self, date: str) -> TOKENS:
+    def _tokenize_date(self, date: str) -> TOKENS:
         year: str = date.split('-')[0]
         if (
                 datetime.strptime(f'{year}-{SPRING[0]}', '%Y-%m-%d')
@@ -214,22 +209,21 @@ class TextPreprocessor:
                 <= datetime.strptime(f'{year}-{AUTUMN[1]}', '%Y-%m-%d')
         ):
             season = '가을'
-
         else:
             season = '겨울'
         season: TOKENS = self.tokenizer.encode(season, add_special_tokens=False)
         return season
 
-    def tokenize_cat(self, cat: str) -> TOKENS:
+    def _tokenize_cat(self, cat: str) -> TOKENS:
         cat: TOKENS = self.tokenizer.encode(cat, add_special_tokens=False)
         return cat
 
-    def tokenize_kwds(self, kwds: str) -> TOKENS:
+    def _tokenize_kwds(self, kwds: str) -> TOKENS:
         kwds: str = make_kwd_tidy(kwds)
         kwds: TOKENS = self.tokenizer.encode(kwds, add_special_tokens=False)
         return kwds
 
-    def apply_dropout(self, tokenized: TOKENS, prob: float) -> TOKENS:
+    def _apply_dropout(self, tokenized: TOKENS, prob: float) -> TOKENS:
         dropout_mask: np.ndarray = np.random.binomial(np.ones_like(tokenized), prob)
         tokenized_dropout: TOKENS = [
             t if dropout_mask[i] == 0 else self.tokenizer.unk_token_id
