@@ -10,9 +10,17 @@ In e-commerce, users’ feedback may vary depending on how the information they 
 
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK01.png?raw=true)
 
+## Experiment
+![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK03.png?raw=true)
+
+![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK04.png?raw=true)
+
+![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK05.png?raw=true)
+
 ## Data Collection
 * 모델 학습을 위한 데이터는 [네이버쇼핑 기획전 서비스](https://shopping.naver.com/plan2/p/index.naver)로부터 수집됩니다.
 * 구체적인 수집 방법 및 절차는 [[Guide] Data Collection.ipynb](https://github.com/iloveslowfood/CLIK/blob/main/etc/%5BGuide%5D%20Data%20Collection.ipynb)에서 확인하실 수 있습니다.
+
 
 ---
 ## Usage
