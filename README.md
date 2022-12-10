@@ -10,6 +10,36 @@ CLIK is composed of dual encoders and auxiliary modules. Dual encoders are featu
 
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK01.png?raw=true)
 
+You can also see the structure with PyTorch-based codes.
+```python
+# networks/clik.py
+class _CLIK(nn.Module, metaclass=ABCMeta):
+    """
+    An abstract class for CLIK
+    """
+    def __init__(
+            self,
+            feature_dim: int,
+            backbone_txt: str,
+            backbone_img: str,
+            memory_bank_size: int,
+            pretrained: bool,
+            temperature: float = 0.07,
+    ):
+        super(_CLIK, self).__init__()
+        # Dual-encoder
+        self.txt_encoder = TextEncoder(backbone_txt, feature_dim, pretrained)
+        self.img_encoder = ImageEncoder(backbone_img, feature_dim, pretrained)
+
+        # Aggregation Module (fully connected layer)
+        self.agg = nn.Linear(2 * feature_dim, feature_dim)
+
+        # Memory Bank
+        self.register_buffer('memory_bank', torch.randn(memory_bank_size, feature_dim))
+        self.memory_bank = F.normalize(self.memory_bank)
+        self.temperature = temperature
+```
+
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK02.png?raw=true)
 
 
