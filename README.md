@@ -1,4 +1,5 @@
 # CLIK: Contrastive Learning for Topic-Dependent Image Ranking
+* Paper Link: [Jihyeong Ko, Contrastive Learning for Topic-Dependent Image Ranking](https://drive.google.com/file/d/1p0GVZzbrjA6_pqpmQYrrS6R_l_WBicim/view)
 * Published(expected): [The 4th Workshop on RecSys 2022 in Fashion & Retail, *fashionXrecsys*](https://recsys.acm.org/recsys22/fashionxrecsys/)
 
 ---
