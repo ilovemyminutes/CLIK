@@ -1,4 +1,5 @@
 # etc
+data_collection/**
 notebooks/**
 tmp**
 tmp/**
