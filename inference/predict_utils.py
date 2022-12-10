@@ -35,39 +35,33 @@ class Predictor:
 
     def infer(
         self,
-        plan_attrs: Dict[str, str],
-        prod_paths: Union[List[int], List[str], List[np.ndarray]],
+        topic: Dict[str, str],
+        images: Union[List[int], List[str], List[np.ndarray]],
         topk: int = 1,
     ) -> Tuple[int, str]:
-        batch = self.collate(plan_attrs, prod_paths)
+        batch = self.collate(topic, images)
         logits = self.model.predict(batch)
         _, indices = torch.topk(logits.squeeze(), k=topk)
-        output = [prod_paths[i] for i in indices.tolist()]
+        output = [images[i] for i in indices.tolist()]
         return output
 
-    def collate(
-        self, plan_attrs: Dict[str, str], prod_paths: Union[List[str], List[np.ndarray]]
-    ):
-        if not isinstance(prod_paths, list):
-            prod_paths = [prod_paths]
+    def collate(self, topic: Dict[str, str], images: Union[List[str], List[np.ndarray]]):
+        if not isinstance(images, list):
+            images = [images]
 
         # collate batch
-        if plan_attrs.get("date", None) is None:
-            plan_attrs["date"] = self.today()
+        if topic.get("date", None) is None:
+            topic["date"] = self.today()
 
-        plc = txt_input_to_device(
-            self.txt_preprocessor(**plan_attrs, expand_dim=True), device=self.device
-        )
-        pri = self.read_transform_imgs(prod_paths).to(self.device)
-        batch = dict(contexts=plc, instances=pri)
+        topic_preprocessed = txt_input_to_device(self.txt_preprocessor(**topic, expand_dim=True), device=self.device)
+        images_preprocessed = self.read_transform_images(images).to(self.device)
+        batch = dict(topics=topic_preprocessed, images=images_preprocessed)
         return batch
 
-    def read_transform_imgs(
-        self, prod_paths: Union[List[str], List[np.ndarray]]
-    ) -> torch.Tensor:
-        if isinstance(prod_paths[0], str):
-            imgs = []
-            for path in prod_paths:
+    def read_transform_images(self, images: Union[List[str], List[np.ndarray]]) -> torch.Tensor:
+        if isinstance(images[0], str):
+            images = []
+            for path in images:
                 if path.startswith("http"):  # load by request
                     img_arr = np.array(
                         bytearray(requests.get(path).content), dtype=np.uint8
@@ -76,13 +70,13 @@ class Predictor:
                 else:  # load from local
                     img = cv2.imread(path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                imgs.append(self.img_transforms(image=img)["image"])
+                images.append(self.img_transforms(image=img)["image"])
 
-        elif isinstance(prod_paths[0], np.ndarray):
-            imgs = [self.img_transforms(image=img)["image"] for img in prod_paths]
+        elif isinstance(images[0], np.ndarray):
+            images = [self.img_transforms(image=img)["image"] for img in images]
 
-        imgs = torch.stack(imgs).to(self.device)
-        return imgs
+        images = torch.stack(images).to(self.device)
+        return images
 
     @staticmethod
     def today() -> str:
