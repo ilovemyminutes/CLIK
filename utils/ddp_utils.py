@@ -112,72 +112,74 @@ class DistributedBatchSampler(BatchSampler):
 
 def step_log_for_dist_training(
     loss: torch.Tensor,
-    m_loss: torch.Tensor,
-    d_loss: torch.Tensor,
-    m_logits_cont_wise: torch.Tensor,
-    m_logits_inst_wise: torch.Tensor,
-    m_labels: torch.Tensor,
-    d_logits: torch.Tensor,
+    matching_loss: torch.Tensor,
+    ranking_loss: torch.Tensor,
+    matching_logits_topic_wise: torch.Tensor,
+    matching_logits_image_wise: torch.Tensor,
+    matching_labels: torch.Tensor,
+    ranking_logits: torch.Tensor,
     device: torch.device,
 ) -> Tuple[float, float, float, float, float, float, float, float, float, float]:
     loss_dist = torch.tensor([loss.item()], dtype=torch.float).to(device)
-    m_loss_dist = torch.tensor([m_loss.item()], dtype=torch.float).to(device)
-    d_loss_dist = torch.tensor([d_loss.item()], dtype=torch.float).to(device)
-    m_acc_cont_wise = torch.tensor(
-        [accuracy(m_logits_cont_wise, m_labels)], dtype=torch.float
+    m_loss_dist = torch.tensor([matching_loss.item()], dtype=torch.float).to(device)
+    r_loss_dist = torch.tensor([ranking_loss.item()], dtype=torch.float).to(device)
+    m_acc_topic_wise = torch.tensor(
+        [accuracy(matching_logits_topic_wise, matching_labels)], dtype=torch.float
     ).to(device)
-    m_acc_inst_wise = torch.tensor(
-        [accuracy(m_logits_inst_wise, m_labels)], dtype=torch.float
+    m_acc_image_wise = torch.tensor(
+        [accuracy(matching_logits_image_wise, matching_labels)], dtype=torch.float
     ).to(device)
-    d_mrr = torch.tensor([mean_reciprocal_rank(d_logits)], dtype=torch.float).to(device)
-    d_top1_top1_acc = topn_isin_topk(d_logits, n=1, k=1, return_as_tensor=True)
-    d_top3_top1_acc = topn_isin_topk(d_logits, n=3, k=1, return_as_tensor=True)
-    d_top5_top1_acc = topn_isin_topk(d_logits, n=5, k=1, return_as_tensor=True)
-    d_top5_top5_acc = topn_isin_topk(d_logits, n=5, k=5, return_as_tensor=True)
+    r_mrr = torch.tensor([mean_reciprocal_rank(ranking_logits)], dtype=torch.float).to(
+        device
+    )
+    r_top1_top1_acc = topn_isin_topk(ranking_logits, n=1, k=1, return_as_tensor=True)
+    r_top3_top1_acc = topn_isin_topk(ranking_logits, n=3, k=1, return_as_tensor=True)
+    r_top5_top1_acc = topn_isin_topk(ranking_logits, n=5, k=1, return_as_tensor=True)
+    r_top5_top5_acc = topn_isin_topk(ranking_logits, n=5, k=5, return_as_tensor=True)
 
     (
         loss_dist,
         m_loss_dist,
-        d_loss_dist,
-        m_acc_cont_wise,
-        m_acc_inst_wise,
-        d_mrr,
-        d_top1_top1_acc,
-        d_top3_top1_acc,
-        d_top5_top1_acc,
-        d_top5_top5_acc,
+        r_loss_dist,
+        m_acc_topic_wise,
+        m_acc_image_wise,
+        r_mrr,
+        r_top1_top1_acc,
+        r_top3_top1_acc,
+        r_top5_top1_acc,
+        r_top5_top5_acc,
     ) = aggregate_data(
         loss_dist,
         m_loss_dist,
-        d_loss_dist,
-        m_acc_cont_wise,
-        m_acc_inst_wise,
-        d_mrr,
-        d_top1_top1_acc,
-        d_top3_top1_acc,
-        d_top5_top1_acc,
-        d_top5_top5_acc,
+        r_loss_dist,
+        m_acc_topic_wise,
+        m_acc_image_wise,
+        r_mrr,
+        r_top1_top1_acc,
+        r_top3_top1_acc,
+        r_top5_top1_acc,
+        r_top5_top5_acc,
     )
     loss_dist = loss_dist.mean().item()
     m_loss_dist = m_loss_dist.mean().item()
-    d_loss_dist = d_loss_dist.mean().item()
-    m_acc_cont_wise = m_acc_cont_wise.mean().item()
-    m_acc_inst_wise = m_acc_inst_wise.mean().item()
-    d_mrr = d_mrr.mean().item()
-    d_top1_top1_acc = d_top1_top1_acc.float().mean().item()
-    d_top3_top1_acc = d_top3_top1_acc.float().mean().item()
-    d_top5_top1_acc = d_top5_top1_acc.float().mean().item()
-    d_top5_top5_acc = d_top5_top5_acc.float().mean().item()
+    r_loss_dist = r_loss_dist.mean().item()
+    m_acc_cont_wise = m_acc_topic_wise.mean().item()
+    m_acc_inst_wise = m_acc_image_wise.mean().item()
+    r_mrr = r_mrr.mean().item()
+    r_top1_top1_acc = r_top1_top1_acc.float().mean().item()
+    r_top3_top1_acc = r_top3_top1_acc.float().mean().item()
+    r_top5_top1_acc = r_top5_top1_acc.float().mean().item()
+    r_top5_top5_acc = r_top5_top5_acc.float().mean().item()
 
     return (
         loss_dist,
         m_loss_dist,
-        d_loss_dist,
+        r_loss_dist,
         m_acc_cont_wise,
         m_acc_inst_wise,
-        d_mrr,
-        d_top1_top1_acc,
-        d_top3_top1_acc,
-        d_top5_top1_acc,
-        d_top5_top5_acc,
+        r_mrr,
+        r_top1_top1_acc,
+        r_top3_top1_acc,
+        r_top5_top1_acc,
+        r_top5_top5_acc,
     )
