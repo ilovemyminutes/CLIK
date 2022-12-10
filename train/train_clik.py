@@ -38,22 +38,22 @@ def train_one_epoch(
     device: torch.device,
 ):
     model.train()
-    for step, ((m_plc, m_pri), (d_plc, d_pri)) in tqdm(
+    for step, ((m_topics, m_images), (r_topics, r_images)) in tqdm(
         enumerate(zip(m_loader, d_loader)), desc=f"[Train: {cur_epoch}/{tot_epoch-1}]"
     ):
-        matching = compose_batch(m_plc, m_pri, device=device)
-        discrim = compose_batch(d_plc, d_pri, device=device)
+        batch_matching = compose_batch(m_topics, m_images, device=device)
+        batch_ranking = compose_batch(r_topics, r_images, device=device)
         with autocast(enabled=True):
             (
-                m_logits_cont_wise,
-                m_logits_inst_wise,
+                m_logits_topic_wise,
+                m_logits_image_wise,
                 m_labels,
                 m_loss,
-                d_logits,
+                r_logits,
                 _,
-                d_loss,
-            ) = model(matching, discrim)
-            loss = 20 * m_loss + d_loss
+                r_loss,
+            ) = model(batch_matching, batch_ranking)
+            loss = 20 * m_loss + r_loss
 
         optim_txt.zero_grad()
         optim_img.zero_grad()
@@ -64,13 +64,13 @@ def train_one_epoch(
         scheduler_txt.step()
         scheduler_img.step()
 
-        m_acc_cont_wise = accuracy(m_logits_cont_wise, m_labels)
-        m_acc_inst_wise = accuracy(m_logits_inst_wise, m_labels)
-        d_mrr = mean_reciprocal_rank(d_logits)
-        d_top1_top1_acc = topn_isin_topk(d_logits, n=1, k=1)
-        d_top3_top1_acc = topn_isin_topk(d_logits, n=3, k=1)
-        d_top5_top1_acc = topn_isin_topk(d_logits, n=5, k=1)
-        d_top5_top5_acc = topn_isin_topk(d_logits, n=5, k=5)
+        m_acc_topic_wise = accuracy(m_logits_topic_wise, m_labels)
+        m_acc_image_wise = accuracy(m_logits_image_wise, m_labels)
+        r_mrr = mean_reciprocal_rank(r_logits)
+        r_top1_top1_acc = topn_isin_topk(r_logits, n=1, k=1)
+        r_top3_top1_acc = topn_isin_topk(r_logits, n=3, k=1)
+        r_top5_top1_acc = topn_isin_topk(r_logits, n=5, k=1)
+        r_top5_top5_acc = topn_isin_topk(r_logits, n=5, k=5)
 
         train_log = dict(
             epoch=cur_epoch,
@@ -79,14 +79,14 @@ def train_one_epoch(
             lr_img=scheduler_img.get_last_lr()[0],
             train_loss=loss.item(),
             train_m_loss=m_loss.item(),
-            train_d_loss=d_loss.item(),
-            train_m_acc_cont_wise=m_acc_cont_wise,
-            train_m_acc_inst_wise=m_acc_inst_wise,
-            train_mrr=d_mrr,
-            train_top1top1_acc=d_top1_top1_acc,
-            train_top3top1_acc=d_top3_top1_acc,
-            train_top5top1_acc=d_top5_top1_acc,
-            train_top5top5_acc=d_top5_top5_acc,
+            train_r_loss=r_loss.item(),
+            train_m_acc_topic_wise=m_acc_topic_wise,
+            train_m_acc_image_wise=m_acc_image_wise,
+            train_mrr=r_mrr,
+            train_top1top1_acc=r_top1_top1_acc,
+            train_top3top1_acc=r_top3_top1_acc,
+            train_top5top1_acc=r_top5_top1_acc,
+            train_top5top5_acc=r_top5_top5_acc,
         )
 
         logger.record(train_log)
@@ -95,7 +95,7 @@ def train_one_epoch(
 def valid_one_epoch(
     model: CLIK,
     m_loader: DataLoader,
-    d_loader: DataLoader,
+    r_loader: DataLoader,
     cur_epoch: int,
     tot_epoch: int,
     device: torch.device,
@@ -104,84 +104,79 @@ def valid_one_epoch(
 
     losses = []  # overall loss
     m_losses = []  # loss of S.M.
-    d_losses = []  # loss of P.D.
-    inbatch_m_accs_cont_wise = []  # S.M accuracy (context-wise)
-    inbatch_m_accs_inst_wise = []  # S.M accuracy (instance-wise)
-    d_mrrs = []  # P.D. MRR
-    d_top1_top1_accs = []  # P.D. Top1-Top1 accuracy
-    d_top3_top1_accs = []  # P.D. Top3-Top1 accuracy
-    d_top5_top1_accs = []  # P.D. Top5-Top1 accuracy
-    d_top5_top5_accs = []  # P.D. Top5-Top5 accuracy
+    r_losses = []  # loss of P.D.
+    inbatch_m_accs_topic_wise = []  # S.M accuracy (Topic-wise)
+    inbatch_m_accs_image_wise = []  # S.M accuracy (Image-wise)
+    r_mrrs = []  # P.D. MRR
+    r_top1_top1_accs = []  # P.D. Top1-Top1 accuracy
+    r_top3_top1_accs = []  # P.D. Top3-Top1 accuracy
+    r_top5_top1_accs = []  # P.D. Top5-Top1 accuracy
+    r_top5_top5_accs = []  # P.D. Top5-Top5 accuracy
 
-    for (m_plc, m_pri), (d_plc, d_pri) in tqdm(
-        zip(m_loader, d_loader), desc=f"[Valid: {cur_epoch}/{tot_epoch-1}]"
+    for (m_topics, m_images), (r_topics, r_images) in tqdm(
+        zip(m_loader, r_loader), desc=f"[Valid: {cur_epoch}/{tot_epoch-1}]"
     ):
-        matching = compose_batch(m_plc, m_pri, device=device)
-        discrim = compose_batch(d_plc, d_pri, device=device)
+        batch_matching = compose_batch(m_topics, m_images, device=device)
+        batch_ranking = compose_batch(r_topics, r_images, device=device)
         with autocast(enabled=True):
             with torch.no_grad():
                 (
-                    m_logits_cont_wise,
-                    m_logits_inst_wise,
+                    m_logits_topic_wise,
+                    m_logits_image_wise,
                     m_labels,
                     m_loss,
-                    d_logits,
+                    r_logits,
                     _,
-                    d_loss,
-                ) = model(matching, discrim, update_queue=False)
+                    r_loss,
+                ) = model(batch_matching, batch_ranking, update_queue=False)
 
-            loss = 20 * m_loss + d_loss
+            loss = 20 * m_loss + r_loss
 
-        m_acc_cont_wise = accuracy(m_logits_cont_wise, m_labels)
-        m_acc_inst_wise = accuracy(m_logits_inst_wise, m_labels)
-        discrim_mrr = mean_reciprocal_rank(d_logits)
-        discrim_top1_top1_acc = topn_isin_topk(d_logits, n=1, k=1)
-        discrim_top3_top1_acc = topn_isin_topk(d_logits, n=3, k=1)
-        discrim_top5_top1_acc = topn_isin_topk(d_logits, n=5, k=1)
-        discrim_top5_top5_acc = topn_isin_topk(d_logits, n=5, k=5)
+        m_acc_topic_wise = accuracy(m_logits_topic_wise, m_labels)
+        m_acc_image_wise = accuracy(m_logits_image_wise, m_labels)
+        ranking_mrr = mean_reciprocal_rank(r_logits)
+        ranking_top1_top1_acc = topn_isin_topk(r_logits, n=1, k=1)
+        ranking_top3_top1_acc = topn_isin_topk(r_logits, n=3, k=1)
+        ranking_top5_top1_acc = topn_isin_topk(r_logits, n=5, k=1)
+        ranking_top5_top5_acc = topn_isin_topk(r_logits, n=5, k=5)
 
         losses.append(loss.item())
         m_losses.append(m_loss.item())
-        d_losses.append(d_loss.item())
-        inbatch_m_accs_cont_wise.append(m_acc_cont_wise)
-        inbatch_m_accs_inst_wise.append(m_acc_inst_wise)
-        d_mrrs.append(discrim_mrr)
-        d_top1_top1_accs.extend(discrim_top1_top1_acc)
-        d_top3_top1_accs.extend(discrim_top3_top1_acc)
-        d_top5_top1_accs.extend(discrim_top5_top1_acc)
-        d_top5_top5_accs.extend(discrim_top5_top5_acc)
+        r_losses.append(r_loss.item())
+        inbatch_m_accs_topic_wise.append(m_acc_topic_wise)
+        inbatch_m_accs_image_wise.append(m_acc_image_wise)
+        r_mrrs.append(ranking_mrr)
+        r_top1_top1_accs.extend(ranking_top1_top1_acc)
+        r_top3_top1_accs.extend(ranking_top3_top1_acc)
+        r_top5_top1_accs.extend(ranking_top5_top1_acc)
+        r_top5_top5_accs.extend(ranking_top5_top5_acc)
 
     loss = np.mean(losses)
     m_loss = np.mean(m_losses)
-    d_loss = np.mean(d_losses)
-    inbatch_m_acc_cont_wise = np.mean(inbatch_m_accs_cont_wise)
-    inbatch_m_acc_inst_wise = np.mean(inbatch_m_accs_inst_wise)
-    d_mrr = np.mean(d_mrrs)
-    d_top1_top1_acc = np.mean(d_top1_top1_accs)
-    d_top3_top1_acc = np.mean(d_top3_top1_accs)
-    d_top5_top1_acc = np.mean(d_top5_top1_accs)
-    d_top5_top5_acc = np.mean(d_top5_top5_accs)
+    r_loss = np.mean(r_losses)
+    inbatch_m_acc_topic_wise = np.mean(inbatch_m_accs_topic_wise)
+    inbatch_m_acc_image_wise = np.mean(inbatch_m_accs_image_wise)
+    r_mrr = np.mean(r_mrrs)
+    r_top1_top1_acc = np.mean(r_top1_top1_accs)
+    r_top3_top1_acc = np.mean(r_top3_top1_accs)
+    r_top5_top1_acc = np.mean(r_top5_top1_accs)
+    r_top5_top5_acc = np.mean(r_top5_top5_accs)
 
     return (
         loss,
         m_loss,
-        d_loss,
-        inbatch_m_acc_cont_wise,
-        inbatch_m_acc_inst_wise,
-        d_mrr,
-        d_top1_top1_acc,
-        d_top3_top1_acc,
-        d_top5_top1_acc,
-        d_top5_top5_acc,
+        r_loss,
+        inbatch_m_acc_topic_wise,
+        inbatch_m_acc_image_wise,
+        r_mrr,
+        r_top1_top1_acc,
+        r_top3_top1_acc,
+        r_top5_top1_acc,
+        r_top5_top5_acc,
     )
 
 
 def main(args: Flags):
-    if args.is_nsml:
-        from nsml import GPU_NUM, DATASET_NAME
-
-        print(f"[+] GPU NUM: {GPU_NUM}, DATASET NAME: {DATASET_NAME}")
-
     device = torch.device(
         f"cuda:{args.gpu_idx}" if torch.cuda.is_available() else "cpu"
     )
@@ -189,10 +184,10 @@ def main(args: Flags):
     print_gpu_status(args.gpu_idx)
 
     # load meta data
-    train_matching, train_discrim, valid_matching, valid_discrim = load_meta_data(args)
+    train_matching, train_ranking, valid_matching, valid_ranking = load_meta_data(args)
 
-    train_cats = train_discrim[args.main_cat_depth].unique().tolist()
-    valid_cats = valid_discrim[args.main_cat_depth].unique().tolist()
+    train_cats = train_ranking[args.main_cat_depth].unique().tolist()
+    valid_cats = valid_ranking[args.main_cat_depth].unique().tolist()
     if len(set(train_cats).intersection(set(valid_cats))) != len(train_cats):
         warnings.warn("There's a category in valid data which is not in train data")
 
@@ -208,63 +203,63 @@ def main(args: Flags):
     train_transforms = get_train_transforms(h=args.img_h, w=args.img_w)
     valid_transforms = get_eval_transforms(h=args.img_h, w=args.img_w)
 
-    train_m_loader, train_d_loader = compose_dataloaders(
+    train_m_loader, train_r_loader = compose_dataloaders(
         meta_matching=train_matching,
-        meta_discrim=train_discrim,
-        target=args.target,
+        meta_Ranking=train_ranking,
+        labeling_criterion=args.labeling_criterion,
         img_dir=args.img_dir,
         img_transforms=train_transforms,
         txt_preprocessor=train_txt_preprocessor,
-        plan_attrs=args.plan_attrs,
+        exhibit_attrs=args.exhibit_attrs,
         prod_attrs=args.prod_attrs,
         matching_size=args.matching_size,
-        discrim_size=args.discrim_size,
-        discrim_iter=args.discrim_iter,
+        ranking_size=args.ranking_size,
+        ranking_iter=args.ranking_iter,
         sampling_method=args.sampling_method,
-        p_txt_aug=args.p_txt_aug,
+        txt_aug_prob=args.txt_aug_prob,
         num_workers=args.num_workers,
     )
 
     valid_m_loader, valid_d_loader = compose_dataloaders(
         meta_matching=valid_matching,
-        meta_discrim=valid_discrim,
-        target=args.target,
+        meta_Ranking=valid_ranking,
+        labeling_criterion=args.labeling_criterion,
         img_dir=args.img_dir,
         img_transforms=valid_transforms,
         txt_preprocessor=valid_txt_preprocessor,
-        plan_attrs=args.plan_attrs,
+        exhibit_attrs=args.exhibit_attrs,
         prod_attrs=None,
         matching_size=args.matching_size,
-        discrim_size=50,
-        discrim_iter=1,
+        ranking_size=args.ranking_size,
+        ranking_iter=args.ranking_iter,
         sampling_method=args.sampling_method,
-        p_txt_aug=0.0,
+        txt_aug_prob=args.txt_aug_prob,
         num_workers=args.num_workers,
     )
     print(
         "[+] Train Data Description\n",
         f"Matching Data Size: {len(train_matching):,d}\n",
-        f"Discrim Data Size: {len(train_discrim):,d}\n",
-        f"# Steps: {len(train_d_loader):,d}\n",
+        f"Ranking Data Size: {len(train_ranking):,d}\n",
+        f"# Steps: {len(train_r_loader):,d}\n",
         f"# Samples for Semantic Matching per Step: {args.matching_size:,d}\n",
-        f"# Samples for Preference Discrimination per Step: {args.discrim_size}\n",
-        f"Sampling Iteration: {args.discrim_iter}\n",
+        f"# Samples for Preference Rankingination per Step: {args.Ranking_size}\n",
+        f"Sampling Iteration: {args.Ranking_iter}\n",
         f"Sampling Method: {args.sampling_method}\n",
-        f"Plan Attributes: {args.plan_attrs}\n",
+        f"Exhibition Attributes: {args.exhibit_attrs}\n",
         f"Prod Attributes: {args.prod_attrs}\n",
-        f"Text Aug. Prob: {args.p_txt_aug}\n",
+        f"Text Aug. Prob: {args.txt_aug_prob}\n",
         f"Pretrained Tokenizer: {args.backbone_txt}\n",
         f"Word Dropout: {args.word_dropout}\n",
     )
     print(
         "[+] Valid Data Description\n",
         f"Matching Data Size: {len(valid_matching):,d}\n",
-        f"Discrim Data Size: {len(valid_discrim):,d}\n",
+        f"Ranking Data Size: {len(valid_ranking):,d}\n",
         f"# Steps: {len(valid_d_loader):,d}\n",
         f"# Samples for Semantic Matching per Step: {args.matching_size:,d}\n",
-        f"# Samples for Preference Discrimination per Step: {50}\n",
+        f"# Samples for Preference Rankingination per Step: {50}\n",
         f"Sampling Iteration: {1}\n",
-        f"Plan Attributes: {args.plan_attrs}\n",
+        f"Exhibition Attributes: {args.exhibit_attrs}\n",
         f"Prod Attributes: {args.prod_attrs}\n",
         f"Pretrained Tokenizer: {args.backbone_txt}\n",
         f"Word Dropout: {0.0}\n",
@@ -273,7 +268,7 @@ def main(args: Flags):
     # build model & train settings
     model = CLIK(
         feature_dim=args.feature_dim,
-        queue_size=args.matching_size,
+        memory_bank_size=args.matching_size,
         backbone_txt=args.backbone_txt,
         backbone_img=args.backbone_img,
         temperature=args.temperature,
@@ -299,7 +294,7 @@ def main(args: Flags):
     optim_img = optim.AdamW(params_img_others, lr=args.lr_img)
 
     # scheduler
-    num_training_steps = len(train_d_loader) * args.epochs
+    num_training_steps = len(train_r_loader) * args.epochs
     num_warmup_steps = int(num_training_steps * 0.01)
     scheduler_txt = get_cosine_with_hard_restarts_schedule_with_warmup(
         optim_txt,
@@ -316,7 +311,7 @@ def main(args: Flags):
     print(
         "[+] Model Description\n",
         f"Embedding Dimension: {args.feature_dim}\n",
-        f"Queue Size: {args.queue_size}\n",
+        f"Memory Bank Size: {args.memory_bank_size}\n",
         f"Backbone for Text Encoder: {args.backbone_txt}\n",
         f"Backbone for Image Encoder: {args.backbone_img}\n",
         f"# Total Params: {num_tot_params:,d}\n",
@@ -361,7 +356,7 @@ def main(args: Flags):
         )
 
     # register arguments to track
-    # P.D. - Preference Discrimination
+    # P.D. - Preference Rankingination
     # S.M. - Semantic Matching
     logger = Logger(args.log_save_dir)
     logger.register(
@@ -373,9 +368,9 @@ def main(args: Flags):
             # train
             "train_loss",  # overall loss
             "train_m_loss",  # loss of S.M.
-            "train_d_loss",  # loss of P.D.
-            "train_m_acc_cont_wise",  # S.M accuracy (context-wise)
-            "train_m_acc_inst_wise",  # S.M accuracy (instance-wise)
+            "train_r_loss",  # loss of P.D.
+            "train_m_acc_topic_wise",  # S.M accuracy (Topic-wise)
+            "train_m_acc_image_wise",  # S.M accuracy (Image-wise)
             "train_mrr",  # P.D. MRR
             "train_top1top1_acc",  # P.D. Top1-Top1 accuracy
             "train_top3top1_acc",  # P.D. Top3-Top1 accuracy
@@ -384,9 +379,9 @@ def main(args: Flags):
             # valid
             "valid_loss",  # overall loss
             "valid_m_loss",  # loss of S.M.
-            "valid_d_loss",  # loss of P.D.
-            "valid_m_acc_cont_wise",  # S.M accuracy (context-wise)
-            "valid_m_acc_inst_wise",  # S.M accuracy (instance-wise)
+            "valid_r_loss",  # loss of P.D.
+            "valid_m_acc_topic_wise",  # S.M accuracy (Topic-wise)
+            "valid_m_acc_image_wise",  # S.M accuracy (Image-wise)
             "valid_mrr",  # P.D. MRR
             "valid_top1top1_acc",  # P.D. Top1-Top1 accuracy
             "valid_top3top1_acc",  # P.D. Top3-Top1 accuracy
@@ -396,13 +391,13 @@ def main(args: Flags):
     )
 
     best_loss = 1e9
-    best_d_loss = 1e9
+    best_r_loss = 1e9
     best_mrr = 0
     best_top1_top1_acc = 0
     best_top5_top1_acc = 0
 
     best_loss_path = os.path.join(args.ckpt_save_dir, "best_loss_clik.pth")
-    best_d_loss_path = os.path.join(args.ckpt_save_dir, "best_dloss_clik.pth")
+    best_r_loss_path = os.path.join(args.ckpt_save_dir, "best_rloss_clik.pth")
     best_mrr_path = os.path.join(args.ckpt_save_dir, "best_mrr_clik.pth")
     best_top1_top1_path = os.path.join(args.ckpt_save_dir, "best_top1top1_clik.pth")
     best_top5_top1_path = os.path.join(args.ckpt_save_dir, "best_top5top1_clik.pth")
@@ -416,7 +411,7 @@ def main(args: Flags):
         train_one_epoch(
             model,
             train_m_loader,
-            train_d_loader,
+            train_r_loader,
             optim_txt,
             optim_img,
             scheduler_txt,
@@ -432,14 +427,14 @@ def main(args: Flags):
         (
             valid_loss,
             valid_m_loss,
-            valid_d_loss,
-            valid_inbatch_m_acc_cont_wise,
-            valid_inbatch_m_acc_inst_wise,
-            valid_d_mrr,
-            valid_d_top1_top1_acc,
-            valid_d_top3_top1_acc,
-            valid_d_top5_top1_acc,
-            valid_d_top5_top5_acc,
+            valid_r_loss,
+            valid_inbatch_m_acc_topic_wise,
+            valid_inbatch_m_acc_image_wise,
+            valid_r_mrr,
+            valid_r_top1_top1_acc,
+            valid_r_top3_top1_acc,
+            valid_r_top5_top1_acc,
+            valid_r_top5_top5_acc,
         ) = valid_one_epoch(
             model,
             valid_m_loader,
@@ -454,14 +449,14 @@ def main(args: Flags):
             epoch=epoch,
             valid_loss=valid_loss,
             valid_m_loss=valid_m_loss,
-            valid_d_loss=valid_d_loss,
-            valid_m_acc_cont_wise=valid_inbatch_m_acc_cont_wise,
-            valid_m_acc_inst_wise=valid_inbatch_m_acc_inst_wise,
-            valid_mrr=valid_d_mrr,
-            valid_top1top1_acc=valid_d_top1_top1_acc,
-            valid_top3top1_acc=valid_d_top3_top1_acc,
-            valid_top5top1_acc=valid_d_top5_top1_acc,
-            valid_top5top5_acc=valid_d_top5_top5_acc,
+            valid_r_loss=valid_r_loss,
+            valid_m_acc_topic_wise=valid_inbatch_m_acc_topic_wise,
+            valid_m_acc_image_wise=valid_inbatch_m_acc_image_wise,
+            valid_mrr=valid_r_mrr,
+            valid_top1top1_acc=valid_r_top1_top1_acc,
+            valid_top3top1_acc=valid_r_top3_top1_acc,
+            valid_top5top1_acc=valid_r_top5_top1_acc,
+            valid_top5top5_acc=valid_r_top5_top5_acc,
         )
         logger.record(valid_log)
 
@@ -471,22 +466,22 @@ def main(args: Flags):
 
         print(
             f"[+] Epoch: {epoch}/{args.epochs-1}\n",
-            f"Train Loss: {ep_result['train_loss']:.4f} - Matching Loss: {ep_result['train_m_loss']:.4f}, Discrim Loss: {ep_result['train_d_loss']:.4f}\n",
-            f"Train in-batch Matching ACC(Context-wise): {ep_result['train_m_acc_cont_wise']:.4f}\n",
-            f"Train in-batch Matching ACC(Instance-wise): {ep_result['train_m_acc_inst_wise']:.4f}\n",
-            f"Train Discrim MRR: {ep_result['train_mrr']:.4f}\n",
-            f"Train Discrim Top1/Top1 ACC: {ep_result['train_top1top1_acc']:.4f}\n",
-            f"Train Discrim Top3/Top1 ACC: {ep_result['train_top3top1_acc']:.4f}\n",
-            f"Train Discrim Top5/Top1 ACC: {ep_result['train_top5top1_acc']:.4f}\n",
-            f"Train Discrim Top5/Top5 ACC: {ep_result['train_top5top5_acc']:.4f}\n",
-            f"Valid Loss: {ep_result['valid_loss']:.4f} - Matching Loss: {ep_result['valid_m_loss']:.4f}, Discrim Loss: {ep_result['valid_d_loss']:.4f}\n",
-            f"Valid in-batch Matching ACC(Context-wise): {ep_result['valid_m_acc_cont_wise']:.4f}\n",
-            f"Valid in-batch Matching ACC(Instance-wise): {ep_result['valid_m_acc_inst_wise']:.4f}\n",
-            f"Valid Discrim MRR: {ep_result['valid_mrr']:.4f}\n",
-            f"Valid Discrim Top1/Top1 ACC: {ep_result['valid_top1top1_acc']:.4f}\n",
-            f"Valid Discrim Top3/Top1 ACC: {ep_result['valid_top3top1_acc']:.4f}\n",
-            f"Valid Discrim Top5/Top1 ACC: {ep_result['valid_top5top1_acc']:.4f}\n",
-            f"Valid Discrim Top5/Top5 ACC: {ep_result['valid_top5top5_acc']:.4f}\n",
+            f"Train Loss: {ep_result['train_loss']:.4f} - Matching Loss: {ep_result['train_m_loss']:.4f}, Ranking Loss: {ep_result['train_r_loss']:.4f}\n",
+            f"Train in-batch Matching ACC(Topic-wise): {ep_result['train_m_acc_topic_wise']:.4f}\n",
+            f"Train in-batch Matching ACC(Image-wise): {ep_result['train_m_acc_image_wise']:.4f}\n",
+            f"Train Ranking MRR: {ep_result['train_mrr']:.4f}\n",
+            f"Train Ranking Top1/Top1 ACC: {ep_result['train_top1top1_acc']:.4f}\n",
+            f"Train Ranking Top3/Top1 ACC: {ep_result['train_top3top1_acc']:.4f}\n",
+            f"Train Ranking Top5/Top1 ACC: {ep_result['train_top5top1_acc']:.4f}\n",
+            f"Train Ranking Top5/Top5 ACC: {ep_result['train_top5top5_acc']:.4f}\n",
+            f"Valid Loss: {ep_result['valid_loss']:.4f} - Matching Loss: {ep_result['valid_m_loss']:.4f}, Ranking Loss: {ep_result['valid_r_loss']:.4f}\n",
+            f"Valid in-batch Matching ACC(Topic-wise): {ep_result['valid_m_acc_topic_wise']:.4f}\n",
+            f"Valid in-batch Matching ACC(Image-wise): {ep_result['valid_m_acc_image_wise']:.4f}\n",
+            f"Valid Ranking MRR: {ep_result['valid_mrr']:.4f}\n",
+            f"Valid Ranking Top1/Top1 ACC: {ep_result['valid_top1top1_acc']:.4f}\n",
+            f"Valid Ranking Top3/Top1 ACC: {ep_result['valid_top3top1_acc']:.4f}\n",
+            f"Valid Ranking Top5/Top1 ACC: {ep_result['valid_top5top1_acc']:.4f}\n",
+            f"Valid Ranking Top5/Top5 ACC: {ep_result['valid_top5top5_acc']:.4f}\n",
         )
 
         # save checkpoint
@@ -507,10 +502,10 @@ def main(args: Flags):
             save_checkpoint(**save_args, save_path=best_loss_path)
             print(f"[+] Best Loss: {best_loss:.4f} - model saved!")
 
-        if ep_result["valid_d_loss"] < best_d_loss:
-            best_d_loss = ep_result["valid_d_loss"]
-            save_checkpoint(**save_args, save_path=best_d_loss_path)
-            print(f"[+] Best Discrim Loss: {best_d_loss:.4f} - model saved!")
+        if ep_result["valid_r_loss"] < best_r_loss:
+            best_r_loss = ep_result["valid_r_loss"]
+            save_checkpoint(**save_args, save_path=best_r_loss_path)
+            print(f"[+] Best Ranking Loss: {best_r_loss:.4f} - model saved!")
 
         if ep_result["valid_mrr"] > best_mrr:
             best_mrr = ep_result["valid_mrr"]
