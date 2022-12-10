@@ -44,13 +44,14 @@ class _CLIK(nn.Module, metaclass=ABCMeta):
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK02.png?raw=true)
 
 ```python
-# initialize Predictor
 model = CLIK(
     feature_dim=...,
     memory_bank_size=...,
 )
 topic_preprocessor = TextPreprocessor(pretrained_tokenizer=...)
 img_transforms = get_eval_transforms(h=224, w=224)
+
+# initialize Predictor
 predictor = Predictor(
     model=model,
     img_transforms=img_transforms,
