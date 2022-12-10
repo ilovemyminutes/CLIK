@@ -43,6 +43,32 @@ class _CLIK(nn.Module, metaclass=ABCMeta):
 
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK02.png?raw=true)
 
+```python
+# initialize Predictor
+model = CLIK(
+    feature_dim=...,
+    memory_bank_size=...,
+)
+topic_preprocessor = TextPreprocessor(pretrained_tokenizer=...)
+img_transforms = get_eval_transforms(h=224, w=224)
+predictor = Predictor(
+    model=model,
+    img_transforms=img_transforms,
+    txt_preprocessor=txt_preprocessor,
+    device=device,
+)
+
+# best image selection (rank top-k images)
+topic = dict(
+    name="Bluetooth smart keyboard multi-pairing mini tenkeyless keyboard",
+    cat1="mens",
+    cat2="digital",
+    kwds="BluetoothKeyboard,Samsung,TenkeylessKeyboard",
+)
+images: List[np.ndarray] = [image_1, image_2, image_3, image_4, image_5]
+topk_images = predictor(topic, prod_paths, topk=args.topk)
+```
+
 
 
 ## Experiment
