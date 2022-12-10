@@ -1,4 +1,6 @@
 import os
+from typing import Optional, List, Dict
+
 import numpy as np
 import pandas as pd
 
@@ -6,6 +8,14 @@ import pandas as pd
 class Logger:
     def __init__(self, start_epoch: int = 0, start_step: int = 0):
         self.resume_from(start_epoch, start_step)
+        self.names: Optional[List[str]] = None
+        self.logs: Optional[Dict[str, List[float]]] = None
+        self.__logs_per_step: Optional[Dict[str, List[float]]] = None
+        self.__logs_per_epoch: Optional[Dict[str, List[float]]] = None
+
+        self.start_epoch: Optional[int] = None
+        self.start_step: Optional[int] = None
+        self.last_step: Optional[int] = None
 
     def register(self, names: list) -> None:
         self.names = names
@@ -28,11 +38,8 @@ class Logger:
             self.__logs_per_step[n].extend(self.logs[n])
             if n == "step":
                 continue
-
             elif n == "epoch":
                 self.__logs_per_epoch[n].append(int(np.nanmean(self.logs[n])))
-
-            # for topn_isin_topk acc
             elif isinstance(self.logs[n][0], list):
                 num_hits, tot_length = 0, 0
                 for step_log in self.logs[n]:
@@ -40,7 +47,6 @@ class Logger:
                         num_hits += sum(step_log)
                         tot_length += len(step_log)
                 self.__logs_per_epoch[n].append(num_hits / tot_length)
-
             else:
                 self.__logs_per_epoch[n].append(np.nanmean(self.logs[n]))
 
@@ -56,7 +62,6 @@ class Logger:
             k: v for k, v in self.__logs_per_step.items() if not isinstance(v[0], list)
         }
         logs_per_step_to_save = pd.DataFrame(logs_per_step_to_save)
-
         logs_per_epoch_to_save.to_csv(
             os.path.join(save_dir, "logs_per_epoch.csv"), index=False
         )
@@ -71,11 +76,9 @@ class Logger:
                 n: self.__logs_per_epoch[n][-1] for n in self.names if n != "step"
             }
             output["step"] = self.last_step
-
-        elif by == "step":
+        else:
             output = {n: self.__logs_per_step[n][-1] for n in self.names}
             output["step"] = self.last_step
-
         return output
 
     def return_logs(self, by: str = "epoch"):
