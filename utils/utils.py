@@ -23,8 +23,8 @@ def print_system_envs():
     """시스템 환경을 출력"""
     num_gpus = torch.cuda.device_count()
     num_cpus = os.cpu_count()
-    cpu_mem_size = virtual_memory().available // (1024 ** 3)
-    gpu_mem_size = torch.cuda.get_device_properties(0).total_memory / 1024 ** 3
+    cpu_mem_size = virtual_memory().available // (1024**3)
+    gpu_mem_size = torch.cuda.get_device_properties(0).total_memory / 1024**3
     print(
         "[+] System environments\n",
         f"Number of GPUs : {num_gpus}\n",
@@ -36,9 +36,9 @@ def print_system_envs():
 
 def print_gpu_status(gpu_idx: int = 3) -> None:
     """GPU 이용 상태를 출력"""
-    total_mem = torch.cuda.get_device_properties(gpu_idx).total_memory / 1024 ** 3
-    reserved = torch.cuda.memory_reserved(gpu_idx) / 1024 ** 3
-    allocated = torch.cuda.memory_allocated(gpu_idx) / 1024 ** 3
+    total_mem = torch.cuda.get_device_properties(gpu_idx).total_memory / 1024**3
+    reserved = torch.cuda.memory_reserved(gpu_idx) / 1024**3
+    allocated = torch.cuda.memory_allocated(gpu_idx) / 1024**3
     free = reserved - allocated
     print(
         "[+] GPU Status\n",
