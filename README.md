@@ -1,6 +1,6 @@
 # CLIK: Contrastive Learning for Topic-Dependent Image Ranking
 * Paper Link: [Jihyeong Ko, Contrastive Learning for Topic-Dependent Image Ranking](https://drive.google.com/file/d/1p0GVZzbrjA6_pqpmQYrrS6R_l_WBicim/view)
-* Published(expected): [The 4th Workshop on RecSys 2022 in Fashion & Retail, *fashionXrecsys*](https://recsys.acm.org/recsys22/fashionxrecsys/)
+* Published: [Fachion×Recsys: RecSys 2022 in Fashion & Retail](https://recsys.acm.org/recsys22/fashionxrecsys/)
 
 ## What is CLIK?
 **CLIK (Contrastive Learning for topic-dependent Image ranKing)** is a novel method that selects the best from multiple images considering a topic. It can consider two factors for the selection: (1) *how attractive each image is to users* and (2) *how well each image fits the given product concept (i.e. topic)*. To understand both factors simultaneously, CLIK performs two novel training tasks. At first, in ***Topic Matching***, it learns the semantic relationship between various images and topics based on contrastive learning. Secondly, in ***Image Ranking***, it ranks given images considering a given topic leveraging knowledge learned from ***Topic Matching*** using contrastive loss. Both training tasks are done simultaneously by integrated modules with shared weights. CLIK showed significant offline evaluation results and had more positive feedback from users in online A/B testing compared to existing methods.
