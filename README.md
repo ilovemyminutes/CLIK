@@ -6,9 +6,13 @@
 **CLIK (Contrastive Learning for topic-dependent Image ranKing)** is a novel method that selects the best from multiple images considering a topic. It can consider two factors for the selection: (1) *how attractive each image is to users* and (2) *how well each image fits the given product concept (i.e. topic)*. To understand both factors simultaneously, CLIK performs two novel training tasks. At first, in ***Topic Matching***, it learns the semantic relationship between various images and topics based on contrastive learning. Secondly, in ***Image Ranking***, it ranks given images considering a given topic leveraging knowledge learned from ***Topic Matching*** using contrastive loss. Both training tasks are done simultaneously by integrated modules with shared weights. CLIK showed significant offline evaluation results and had more positive feedback from users in online A/B testing compared to existing methods.
 
 ## How does CLIK work?
-![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK02.png?raw=true)
+CLIK is composed of dual encoders and auxiliary modules. Dual encoders are feature extractors for images and topic (see ‘Text Encoder’ and ‘Image Encoder’ in Figure). Auxiliary modules include three parts: *Aggregation*, *Attention*, and *Memory Bank*. In a nutshell, they are used to generate a special query embedding for a compatibility score prediction, one of the essential components of CLIK.
 
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK01.png?raw=true)
+
+![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK02.png?raw=true)
+
+
 
 ## Experiment
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK03.png?raw=true)
