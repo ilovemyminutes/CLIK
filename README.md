@@ -38,6 +38,7 @@ class _CLIK(nn.Module, metaclass=ABCMeta):
         self.register_buffer('memory_bank', torch.randn(memory_bank_size, feature_dim))
         self.memory_bank = F.normalize(self.memory_bank)
         self.temperature = temperature
+    ...
 ```
 
 ![](https://github.com/iloveslowfood/CLIK/blob/master/etc/CLIK02.png?raw=true)
