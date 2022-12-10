@@ -10,7 +10,7 @@ from networks import CLIK
 from utils.data_utils import txt_input_to_device
 
 
-class TaskOperator:
+class Predictor:
     def __init__(
         self,
         model: CLIK,
@@ -36,7 +36,7 @@ class TaskOperator:
     def infer(
         self,
         plan_attrs: Dict[str, str],
-        prod_paths: Union[List[int], List[str], List[np.array]],
+        prod_paths: Union[List[int], List[str], List[np.ndarray]],
         topk: int = 1,
     ) -> Tuple[int, str]:
         batch = self.collate(plan_attrs, prod_paths)
@@ -46,7 +46,7 @@ class TaskOperator:
         return output
 
     def collate(
-        self, plan_attrs: Dict[str, str], prod_paths: Union[List[str], List[np.array]]
+        self, plan_attrs: Dict[str, str], prod_paths: Union[List[str], List[np.ndarray]]
     ):
         if not isinstance(prod_paths, list):
             prod_paths = [prod_paths]
@@ -63,7 +63,7 @@ class TaskOperator:
         return batch
 
     def read_transform_imgs(
-        self, prod_paths: Union[List[str], List[np.array]]
+        self, prod_paths: Union[List[str], List[np.ndarray]]
     ) -> torch.Tensor:
         if isinstance(prod_paths[0], str):
             imgs = []

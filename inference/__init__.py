@@ -1,1 +1,1 @@
-from .operator import TaskOperator
+from .predict_utils import TaskOperator
