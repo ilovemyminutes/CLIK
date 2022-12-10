@@ -3,6 +3,9 @@
 * Published(expected): [The 4th Workshop on RecSys 2022 in Fashion & Retail, *fashionXrecsys*](https://recsys.acm.org/recsys22/fashionxrecsys/)
 
 ---
+## Abstract
+In e-commerce, users’ feedback may vary depending on how the information they encounter is structured. Recently, ranking approaches based on deep learning successfully provided good content to users. In this line of work, we propose a novel method for selecting the best from multiple images considering a topic. For a given product, we can commonly imagine selecting the representative from several images describing the product to sell it with intuitive visual information. In this case, we should consider two factors: (1) how attractive each image is to users and (2) how well each image fits the given product concept (i.e. topic). Even though it seems that existing ranking approaches can solve the problem, we experimentally observed that they do not consider the factor (2) correctly. In this paper, we propose CLIK (Contrastive Learning for topic-dependent Image ranKing) that effectively solves the problem by considering both factors simultaneously. Our model performs two novel training tasks. At first, in Topic Matching, our model learns the semantic relationship between various images and topics based on contrastive learning. Secondly, in Image Ranking, our model ranks given images considering a given topic leveraging knowledge learned from Topic Matching using contrastive loss. Both training tasks are done simultaneously by integrated modules with shared weights. Our method showed significant offline evaluation results and had more positive feedback from users in online A/B testing compared to existing methods.
+
 ## Data Collection
 * 모델 학습을 위한 데이터는 [네이버쇼핑 기획전 서비스](https://shopping.naver.com/plan2/p/index.naver)로부터 수집됩니다.
 * 구체적인 수집 방법 및 절차는 [[Guide] Data Collection.ipynb](https://github.com/iloveslowfood/CLIK/blob/main/etc/%5BGuide%5D%20Data%20Collection.ipynb)에서 확인하실 수 있습니다.
